@@ -1,0 +1,96 @@
+package claim
+
+import "testing"
+
+func TestOverlap(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		// identical and containment
+		{"src/auth/token.go", "src/auth/token.go", true},
+		{"src/auth/**", "src/auth/token.go", true},
+		{"src/**", "src/auth/token.go", true},
+		{"**", "anything/at/all.go", true},
+		// `**` matches zero segments here, so a subtree claim also overlaps the
+		// directory itself. That is the safe direction: overlap detection may
+		// over-report, never under-report.
+		{"src/auth/**", "src/auth", true},
+
+		// disjoint
+		{"src/auth/**", "src/billing/**", false},
+		{"src/auth/token.go", "src/auth/session.go", false},
+		{"src/auth/*.go", "src/auth/sub/deep.go", false},
+
+		// single-segment stars
+		{"src/*/token.go", "src/auth/token.go", true},
+		{"src/*/token.go", "src/auth/sub/token.go", false},
+		{"src/auth/*.go", "src/auth/token.go", true},
+		{"src/auth/*.go", "src/auth/token.ts", false},
+		{"src/auth/*_test.go", "src/auth/token_test.go", true},
+		{"src/auth/*_test.go", "src/auth/token.go", false},
+
+		// glob against glob — the case a match-a-file matcher cannot answer
+		{"src/**/handler.go", "src/api/v1/handler.go", true},
+		{"src/**/*.go", "**/auth/**", true},
+		{"src/auth/**", "**/*.go", true},
+		{"docs/**", "src/**", false},
+		{"src/a*/x.go", "src/*b/x.go", true}, // e.g. src/ab/x.go
+		{"src/a*/x.go", "src/b*/x.go", false},
+
+		// ** matching zero segments
+		{"src/**/x.go", "src/x.go", true},
+		{"a/**/b/**/c", "a/b/c", true},
+	}
+	for _, c := range cases {
+		if got := Overlap(c.a, c.b); got != c.want {
+			t.Errorf("Overlap(%q,%q) = %v, want %v", c.a, c.b, got, c.want)
+		}
+		if got := Overlap(c.b, c.a); got != c.want {
+			t.Errorf("Overlap(%q,%q) [reversed] = %v, want %v", c.b, c.a, got, c.want)
+		}
+	}
+}
+
+func TestNormalize(t *testing.T) {
+	got := Normalize("src/auth")
+	want := []string{"src/auth", "src/auth/**"}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("Normalize(src/auth) = %v, want %v", got, want)
+	}
+	// a bare directory claim must cover files inside it
+	if !Overlap(Normalize("src/auth")[1], "src/auth/token.go") {
+		t.Error("bare directory claim does not cover its subtree")
+	}
+	// a file is not expanded into a subtree
+	if g := Normalize("src/auth/middleware.go"); len(g) != 1 {
+		t.Errorf("file path expanded as a directory: %v", g)
+	}
+	// a dotted directory is still a directory
+	if g := Normalize(".github"); len(g) != 2 {
+		t.Errorf(".github should expand to a subtree: %v", g)
+	}
+	if g := Normalize(".github/workflows/ci.yml"); len(g) != 1 {
+		t.Errorf("dotted path with a file at the end expanded: %v", g)
+	}
+	// an explicit glob is left alone
+	if g := Normalize("src/**/*.go"); len(g) != 1 || g[0] != "src/**/*.go" {
+		t.Errorf("Normalize mangled an explicit glob: %v", g)
+	}
+	// leading ./ and trailing / are tolerated
+	if g := Normalize("./src/auth/"); len(g) != 2 || g[0] != "src/auth" {
+		t.Errorf("Normalize(./src/auth/) = %v", g)
+	}
+}
+
+func TestPatternsOverlapReportsPairs(t *testing.T) {
+	a := []string{"src/auth/**", "docs/auth.md"}
+	b := []string{"src/**/token.go", "README.md"}
+	hits := PatternsOverlap(a, b)
+	if len(hits) != 1 {
+		t.Fatalf("want 1 overlapping pair, got %d: %v", len(hits), hits)
+	}
+	if hits[0][0] != "src/auth/**" || hits[0][1] != "src/**/token.go" {
+		t.Errorf("wrong pair reported: %v", hits[0])
+	}
+}
