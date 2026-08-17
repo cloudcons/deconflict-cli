@@ -111,6 +111,19 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 func openStore(dsn string) (store.Store, error) { return store.Open(dsn) }
 
+// takeID pulls a leading positional claim id out of the argument list.
+//
+// Go's flag package stops parsing at the first non-flag argument, so
+// `claims release <id> --reason abandoned` would parse zero flags and silently
+// record the default reason. Silently storing the wrong reason is worse than
+// erroring, so the id is removed before the flags are parsed.
+func takeID(args []string) (string, []string) {
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		return args[0], args[1:]
+	}
+	return "", args
+}
+
 func splitList(s string) []string {
 	var out []string
 	for _, p := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == '\n' }) {
@@ -403,11 +416,14 @@ func cmdRelease(args []string, out io.Writer) error {
 	reason := fs.String("reason", "merged", "merged | abandoned | superseded")
 	pr := fs.String("pr", "", "PR URL to record")
 	dsn := fs.String("store", "", "store DSN")
+	id, args := takeID(args)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	cwd, _ := os.Getwd()
-	id := fs.Arg(0)
+	if id == "" {
+		id = fs.Arg(0)
+	}
 	if id == "" {
 		id = readCurrent(cwd)
 	}
@@ -438,11 +454,14 @@ func cmdRenew(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("renew", flag.ContinueOnError)
 	ttl := fs.Duration("ttl", 8*time.Hour, "new lease from now")
 	dsn := fs.String("store", "", "store DSN")
+	id, args := takeID(args)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	cwd, _ := os.Getwd()
-	id := fs.Arg(0)
+	if id == "" {
+		id = fs.Arg(0)
+	}
 	if id == "" {
 		id = readCurrent(cwd)
 	}
