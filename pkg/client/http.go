@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cloudops/agentclaims/internal/claim"
-	"github.com/cloudops/agentclaims/internal/settings"
+	"github.com/cloudcons/agentclaims/internal/claim"
+	"github.com/cloudcons/agentclaims/internal/settings"
 )
 
 // HTTPStore talks to `claims serve` — the shared-registry backend for a team.

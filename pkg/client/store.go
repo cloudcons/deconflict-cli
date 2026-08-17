@@ -13,8 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudops/agentclaims/internal/claim"
-	"github.com/cloudops/agentclaims/internal/settings"
+	"github.com/cloudcons/agentclaims/internal/claim"
+	"github.com/cloudcons/agentclaims/internal/settings"
 )
 
 type Store interface {

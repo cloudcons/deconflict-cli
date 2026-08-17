@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudops/agentclaims/internal/claim"
-	"github.com/cloudops/agentclaims/internal/gitinfo"
-	"github.com/cloudops/agentclaims/internal/store"
+	"github.com/cloudcons/agentclaims/internal/claim"
+	"github.com/cloudcons/agentclaims/internal/gitinfo"
+	"github.com/cloudcons/agentclaims/internal/store"
 )
 
 const usage = `claims — advisory intention claims for agents working one repo in parallel

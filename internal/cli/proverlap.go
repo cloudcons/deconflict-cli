@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudops/agentclaims/internal/claim"
+	"github.com/cloudcons/agentclaims/internal/claim"
 )
 
 // PR overlap detection, which is deliberately independent of the claim
