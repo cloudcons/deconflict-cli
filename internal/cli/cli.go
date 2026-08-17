@@ -19,16 +19,30 @@ import (
 
 const usage = `claims — advisory intention claims for agents working one repo in parallel
 
-  claims claim   --paths <glob,...> --what <text> [--why ...] [--not ...]
+Claiming
+  claims claim   --paths <glob,...> --what <text> [--why ...] [--not ...] [--task <ref>]
   claims check   [--paths <glob,...>] [--file <path>]   what overlaps this area
   claims list    [--all] [--repo <id>] [--json]
   claims release [id] [--reason merged|abandoned|superseded] [--pr <url>]
   claims renew   [id] [--ttl 8h]
   claims status                          my claim, with git-derived progress
   claims reconcile [--apply]             close claims whose branch is merged
+
+Account (registries with accounts enabled)
+  claims login   [--server URL]          sign in through a browser, once
+  claims logout  [--all]
+  claims whoami                          who this machine is, and what is enabled
+  claims token   <list|create|revoke>    personal API tokens for agents
+
+Work tracker
+  claims task    <resolve|search>        look up a work item before claiming it
+  claims plugins <list|providers|test|deliveries|retry>
+
+Everything else
   claims pr-overlap --repo o/n --pr N [--comment]   which open PRs share files
   claims settings [--json]               what the operator has configured
-  claims serve   [--addr :7777]          shared registry + control panel
+  claims serve   [--addr :7777] [--db postgres://…]  registry + control panel
+  claims genkey                          a key for sealing integration secrets
   claims hook    <session-start|pre-tool|user-prompt>
 
 Store: $AGENTCLAIMS_STORE (file:/path or http://host:port), default local file.
@@ -65,6 +79,20 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdServe(rest, stdout)
 	case "hook":
 		err = cmdHook(rest, stdout)
+	case "login":
+		err = cmdLogin(rest, stdout)
+	case "logout":
+		err = cmdLogout(rest, stdout)
+	case "whoami":
+		err = cmdWhoami(rest, stdout)
+	case "token", "tokens":
+		err = cmdToken(rest, stdout)
+	case "plugins", "integrations":
+		err = cmdPlugins(rest, stdout)
+	case "task", "tasks":
+		err = cmdTask(rest, stdout)
+	case "genkey":
+		err = cmdGenkey(rest, stdout)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return 0

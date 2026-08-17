@@ -56,6 +56,15 @@ func (h *HTTPStore) do(method, path string, body any) ([]byte, error) {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if resp.StatusCode/100 != 2 {
+		// The two statuses worth translating. An agent that hits either of
+		// these has a human problem, not a network problem, and the fix is one
+		// command away — saying so here saves reading the server log.
+		switch resp.StatusCode {
+		case http.StatusUnauthorized:
+			return nil, fmt.Errorf("%s rejected this credential — run `claims login --server %s`", h.Base, h.Base)
+		case http.StatusForbidden:
+			return nil, fmt.Errorf("%s: %s", h.Base, bytes.TrimSpace(b))
+		}
 		return nil, fmt.Errorf("%s %s: %s: %s", method, path, resp.Status, bytes.TrimSpace(b))
 	}
 	return b, nil

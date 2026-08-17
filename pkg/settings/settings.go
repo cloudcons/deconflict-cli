@@ -145,11 +145,28 @@ func (s *Settings) Validate() error {
 	return nil
 }
 
+// Provider is where settings live. Two implementations: a JSON file beside the
+// event log (the single-machine and no-database case) and a row in Postgres.
+//
+// Load never returns an error. That is a deliberate constraint on every
+// implementation: settings are read on the path of every client call, and a
+// registry that cannot answer "what is the default lease" must fall back to
+// defaults rather than fail the claim. Save is where problems are reported,
+// because that is where a human is waiting for an answer.
+type Provider interface {
+	Load() Settings
+	Save(Settings) error
+	// Describe names the backing store for the startup banner.
+	Describe() string
+}
+
 // Store persists settings beside the event log.
 type Store struct {
 	Path string
 	mu   sync.RWMutex
 }
+
+func (st *Store) Describe() string { return st.Path }
 
 func NewStore(logPath string) *Store {
 	return &Store{Path: filepath.Join(filepath.Dir(logPath), "settings.json")}

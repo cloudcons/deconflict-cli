@@ -25,6 +25,17 @@ type Claim struct {
 	Host   string `json:"host,omitempty"`
 	Branch string `json:"branch,omitempty"`
 
+	// UserID and UserLogin are the authenticated human behind the agent, filled
+	// in by the server from the credential rather than by the client from a
+	// flag. Agent stays as it was — a self-reported label like "ana/claude" —
+	// because the two answer different questions: which process is doing this,
+	// and whose account is accountable for it. Both are empty for claims made
+	// through the legacy shared token or against a local file store, which is
+	// why nothing may assume they are set.
+	UserID    string `json:"user_id,omitempty"`
+	UserLogin string `json:"user_login,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+
 	// HeadSHA is the branch tip when the claim was made. It is what lets
 	// reconcile tell "not started" apart from "already landed" — both of
 	// which look identical by commit count.
