@@ -27,7 +27,8 @@ const usage = `claims — advisory intention claims for agents working one repo 
   claims status                          my claim, with git-derived progress
   claims reconcile [--apply]             close claims whose branch is merged
   claims pr-overlap --repo o/n --pr N [--comment]   which open PRs share files
-  claims serve   [--addr :7777]          shared registry for a team
+  claims settings [--json]               what the operator has configured
+  claims serve   [--addr :7777]          shared registry + control panel
   claims hook    <session-start|pre-tool|user-prompt>
 
 Store: $AGENTCLAIMS_STORE (file:/path or http://host:port), default local file.
@@ -56,6 +57,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdStatus(rest, stdout)
 	case "reconcile":
 		err = cmdReconcile(rest, stdout)
+	case "settings":
+		err = cmdSettings(rest, stdout)
 	case "pr-overlap":
 		err = cmdPROverlap(rest, stdout)
 	case "serve":
@@ -144,7 +147,7 @@ func cmdClaim(args []string, out io.Writer) error {
 	iface := fs.String("interface", "", "expected interface/schema changes others would notice")
 	prio := fs.String("priority", "", "priority label, free-form")
 	task := fs.String("task", "", "external ticket reference")
-	ttl := fs.Duration("ttl", 8*time.Hour, "lease duration; the claim decays after this")
+	ttl := fs.Duration("ttl", 0, "lease duration; the claim decays after this (default: operator setting)")
 	dsn := fs.String("store", "", "store DSN")
 	asJSON := fs.Bool("json", false, "emit the claim as JSON")
 	force := fs.Bool("force", false, "claim even if it overlaps (default: still claims, exits 3)")
@@ -158,6 +161,21 @@ func cmdClaim(args []string, out io.Writer) error {
 	st, err := openStore(*dsn)
 	if err != nil {
 		return err
+	}
+	cfg := st.Settings()
+	if *ttl == 0 {
+		*ttl = cfg.DefaultLease.Std()
+	}
+	if max := cfg.MaxLease.Std(); max > 0 && *ttl > max {
+		fmt.Fprintf(out, "lease capped at the configured maximum of %s\n", max)
+		*ttl = max
+	}
+	if cfg.RequireWhy && strings.TrimSpace(*why) == "" {
+		return fmt.Errorf("--why is required here (operator setting): another agent needs it to judge the overlap")
+	}
+	if cfg.RequireNot && strings.TrimSpace(*not) == "" {
+		return fmt.Errorf("--not is required here (operator setting): state what you will NOT touch, " +
+			"or others must back off from your whole area")
 	}
 	now := time.Now().UTC()
 	c := claim.Claim{
@@ -182,7 +200,7 @@ func cmdClaim(args []string, out io.Writer) error {
 	// announcement, and an overlap is a thing both sides should see.
 	var conflicts []claim.Conflict
 	if evs, err := st.Events(); err == nil {
-		conflicts = claim.FindOverlaps(claim.Fold(evs), c.Repo, c.Paths, now, nil)
+		conflicts = claim.FindOverlaps(claim.Fold(evs), c.Repo, c.Paths, now, nil, cfg.IgnorePaths)
 	} else {
 		fmt.Fprintf(out, "warning: could not read registry (%v) — claiming anyway\n", err)
 	}
@@ -263,7 +281,7 @@ func cmdCheck(args []string, out io.Writer) error {
 	if id := readCurrent(cwd); id != "" {
 		mine[id] = true
 	}
-	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), claim.NormalizeAll(list), now, mine)
+	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), claim.NormalizeAll(list), now, mine, st.Settings().IgnorePaths)
 	if *asJSON {
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
@@ -525,4 +543,47 @@ func cmdReconcile(args []string, out io.Writer) error {
 		fmt.Fprintln(out, "nothing to reconcile.")
 	}
 	return nil
+}
+
+// cmdSettings shows what the registry is configured to do. Read-only on
+// purpose: settings are changed in the control panel or by editing the file,
+// and a CLI writer would be a third path to keep consistent.
+func cmdSettings(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("settings", flag.ContinueOnError)
+	dsn := fs.String("store", "", "store DSN")
+	asJSON := fs.Bool("json", false, "emit JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	st, err := openStore(*dsn)
+	if err != nil {
+		return err
+	}
+	cfg := st.Settings()
+	if *asJSON {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(cfg)
+	}
+	fmt.Fprintf(out, "registry:       %s\n", st.Describe())
+	fmt.Fprintf(out, "default lease:  %s (max %s)\n", cfg.DefaultLease.Std(), cfg.MaxLease.Std())
+	fmt.Fprintf(out, "auto-release:   %v (grace %s)\n", cfg.AutoReleaseStale, cfg.StaleGrace.Std())
+	fmt.Fprintf(out, "required:       %s\n", requiredFields(cfg.RequireWhy, cfg.RequireNot))
+	fmt.Fprintf(out, "webhook:        %s\n", map[bool]string{true: "configured", false: "none"}[cfg.WebhookURL != "" && cfg.WebhookOnOverlap])
+	fmt.Fprintf(out, "never overlap:  %s\n", strings.Join(cfg.IgnorePaths, ", "))
+	return nil
+}
+
+func requiredFields(why, not bool) string {
+	var f []string
+	if why {
+		f = append(f, "--why")
+	}
+	if not {
+		f = append(f, "--not")
+	}
+	if len(f) == 0 {
+		return "nothing beyond --paths and --what"
+	}
+	return strings.Join(f, ", ")
 }

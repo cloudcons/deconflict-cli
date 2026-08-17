@@ -159,9 +159,39 @@ type Conflict struct {
 	Pairs [][2]string `json:"pairs"`
 }
 
+// IsIgnored reports whether a concrete path is covered by an ignore glob.
+//
+// Ignores are applied to concrete paths only, never to glob-vs-glob claim
+// comparison. Deciding whether one glob is wholly contained in another is a
+// different and much weaker question than whether two globs intersect, and
+// guessing at it would suppress real overlaps. The noise these lists exist to
+// kill — every pull request touching go.sum — arrives as real filenames
+// anyway.
+func IsIgnored(path string, ignore []string) bool {
+	if strings.ContainsAny(path, "*") {
+		return false
+	}
+	for _, ig := range ignore {
+		if Overlap(ig, path) {
+			return true
+		}
+	}
+	return false
+}
+
 // FindOverlaps returns active claims in the same repo whose paths intersect the
-// given patterns, excluding the agent's own claim IDs.
-func FindOverlaps(claims []Claim, repo string, paths []string, now time.Time, exclude map[string]bool) []Conflict {
+// given patterns, excluding the agent's own claim IDs and any query path the
+// ignore list covers.
+func FindOverlaps(claims []Claim, repo string, paths []string, now time.Time, exclude map[string]bool, ignore []string) []Conflict {
+	var query []string
+	for _, p := range paths {
+		if !IsIgnored(p, ignore) {
+			query = append(query, p)
+		}
+	}
+	if len(query) == 0 {
+		return nil
+	}
 	var out []Conflict
 	for _, c := range claims {
 		if exclude[c.ID] || !c.Active(now) {
@@ -170,13 +200,74 @@ func FindOverlaps(claims []Claim, repo string, paths []string, now time.Time, ex
 		if repo != "" && c.Repo != "" && c.Repo != repo {
 			continue
 		}
-		pairs := PatternsOverlap(paths, c.Paths)
+		pairs := PatternsOverlap(query, c.Paths)
 		if len(pairs) == 0 {
 			continue
 		}
 		out = append(out, Conflict{Other: c, Pairs: pairs})
 	}
 	return out
+}
+
+// Pair is a mutual overlap between two active claims, for the dashboard.
+type Pair struct {
+	A     Claim       `json:"a"`
+	B     Claim       `json:"b"`
+	Pairs [][2]string `json:"pairs"`
+	// Mutual is true when neither side listed the other's area as
+	// "not touching" — the overlaps worth acting on.
+	Mutual bool `json:"mutual"`
+}
+
+// LiveOverlaps returns every pair of currently active claims that share ground,
+// within a repo. Order is stable and each pair appears once.
+func LiveOverlaps(claims []Claim, now time.Time) []Pair {
+	var active []Claim
+	for _, c := range claims {
+		if c.Active(now) {
+			active = append(active, c)
+		}
+	}
+	var out []Pair
+	for i := 0; i < len(active); i++ {
+		for j := i + 1; j < len(active); j++ {
+			a, b := active[i], active[j]
+			if a.Repo != b.Repo {
+				continue
+			}
+			pairs := PatternsOverlap(a.Paths, b.Paths)
+			if len(pairs) == 0 {
+				continue
+			}
+			out = append(out, Pair{A: a, B: b, Pairs: pairs, Mutual: !disclaimed(a, b) && !disclaimed(b, a)})
+		}
+	}
+	return out
+}
+
+// disclaimed reports whether everything of b's that a touches sits inside a's
+// explicit "not touching" list — the case where the two can proceed alongside
+// each other and the warning should carry less weight.
+func disclaimed(a, b Claim) bool {
+	if len(a.NotPaths) == 0 {
+		return false
+	}
+	shared := PatternsOverlap(a.Paths, b.Paths)
+	for _, p := range shared {
+		covered := false
+		for _, n := range a.NotPaths {
+			// Containment, not intersection: "I am not touching
+			// src/auth/middleware.go" does not disclaim src/**/*.go.
+			if Covers(n, p[1]) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return false
+		}
+	}
+	return true
 }
 
 // Render formats conflicts for an agent to read. Terse on purpose: this lands

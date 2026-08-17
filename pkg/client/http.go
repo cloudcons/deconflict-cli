@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/cloudops/agentclaims/internal/claim"
+	"github.com/cloudops/agentclaims/internal/settings"
 )
 
 // HTTPStore talks to `claims serve` — the shared-registry backend for a team.
@@ -58,6 +59,20 @@ func (h *HTTPStore) do(method, path string, body any) ([]byte, error) {
 		return nil, fmt.Errorf("%s %s: %s: %s", method, path, resp.Status, bytes.TrimSpace(b))
 	}
 	return b, nil
+}
+
+// Settings fetches operator settings, degrading to defaults if the registry is
+// unreachable — the same rule as everywhere else: never block on it.
+func (h *HTTPStore) Settings() settings.Settings {
+	b, err := h.do(http.MethodGet, "/v1/settings", nil)
+	if err != nil {
+		return settings.Defaults()
+	}
+	s := settings.Defaults()
+	if err := json.Unmarshal(b, &s); err != nil {
+		return settings.Defaults()
+	}
+	return s
 }
 
 func (h *HTTPStore) Append(e claim.Event) error {

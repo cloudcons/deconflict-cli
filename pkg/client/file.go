@@ -9,12 +9,18 @@ import (
 	"syscall"
 
 	"github.com/cloudops/agentclaims/internal/claim"
+	"github.com/cloudops/agentclaims/internal/settings"
 )
 
 // FileStore is an append-only JSONL log on local disk.
 type FileStore struct{ Path string }
 
 func (f *FileStore) Describe() string { return "file:" + f.Path }
+
+// Settings reads the sibling settings.json, falling back to defaults.
+func (f *FileStore) Settings() settings.Settings {
+	return settings.NewStore(f.Path).Load()
+}
 
 func (f *FileStore) Append(e claim.Event) error {
 	if err := os.MkdirAll(filepath.Dir(f.Path), 0o755); err != nil {

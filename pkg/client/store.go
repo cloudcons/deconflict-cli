@@ -14,11 +14,17 @@ import (
 	"strings"
 
 	"github.com/cloudops/agentclaims/internal/claim"
+	"github.com/cloudops/agentclaims/internal/settings"
 )
 
 type Store interface {
 	Append(claim.Event) error
 	Events() ([]claim.Event, error)
+	// Settings lets a client honour operator-set defaults — the lease length,
+	// the ignore list, whether --why is mandatory. Without this the control
+	// panel would only configure the server, and the knobs that matter are the
+	// ones that change what the next `claims claim` does.
+	Settings() settings.Settings
 	Describe() string
 }
 

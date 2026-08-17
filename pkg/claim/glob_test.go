@@ -94,3 +94,30 @@ func TestPatternsOverlapReportsPairs(t *testing.T) {
 		t.Errorf("wrong pair reported: %v", hits[0])
 	}
 }
+
+func TestCoversIsContainmentNotIntersection(t *testing.T) {
+	cases := []struct {
+		outer, inner string
+		want         bool
+		note         string
+	}{
+		// The bug this exists to prevent: a narrow "not touching" line must not
+		// disclaim a broad pattern it merely intersects.
+		{"src/auth/middleware.go", "src/**/*.go", false, "one file does not cover every go file"},
+		{"src/billing", "src/billing/**", false, "the dir alone is not the subtree"},
+
+		{"**", "anything/**", true, "** covers everything"},
+		{"src/billing/**", "src/billing/invoice.go", true, "subtree covers a file under it"},
+		{"src/billing/**", "src/billing/**/*.go", true, "subtree covers a pattern under it"},
+		{"src/billing/**", "src/**/*.go", false, "the inner pattern escapes the prefix"},
+		{"src/billing/**", "src/auth/**", false, "different subtree"},
+		{"src/*/gen/**", "src/a/gen/x.go", true, "concrete inner path is matched exactly"},
+		{"src/*/**", "src/a/b.go", true, "wildcard segment still matches a concrete path"},
+		{"src/*/**", "src/*/deep/**", false, "conservative: wildcard prefix is not proven"},
+	}
+	for _, c := range cases {
+		if got := Covers(c.outer, c.inner); got != c.want {
+			t.Errorf("Covers(%q,%q) = %v, want %v — %s", c.outer, c.inner, got, c.want, c.note)
+		}
+	}
+}

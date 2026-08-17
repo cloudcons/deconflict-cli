@@ -155,3 +155,42 @@ func allStars(s string) bool {
 func Match(pattern, path string) bool {
 	return Overlap(pattern, path)
 }
+
+// Covers reports whether *every* path matched by inner is also matched by
+// outer — containment, not intersection.
+//
+// The distinction is load-bearing and easy to get wrong: `src/auth/token.go`
+// intersects `src/**/*.go`, but it does not cover it. Reading intersection as
+// coverage would let one narrow "not touching" line mark an entire overlap as
+// benign, which is exactly the warning the tool exists to raise.
+//
+// This is deliberately conservative and incomplete: it answers yes only in the
+// cases it can be sure of, and an unsure answer is "not covered", which keeps
+// the overlap visible. Over-warning is recoverable; under-warning is the
+// failure this tool exists to prevent.
+func Covers(outer, inner string) bool {
+	if outer == "**" {
+		return true
+	}
+	if !strings.ContainsAny(inner, "*") {
+		// A concrete path: plain matching is exact.
+		return Overlap(outer, inner)
+	}
+	// Both are patterns. The only case we can be certain about is a subtree
+	// claim (`prefix/**`) against a pattern living wholly under that same
+	// literal prefix.
+	os, is := split(outer), split(inner)
+	if len(os) < 2 || os[len(os)-1] != "**" {
+		return false
+	}
+	prefix := os[:len(os)-1]
+	if len(is) < len(prefix) {
+		return false
+	}
+	for i, seg := range prefix {
+		if strings.ContainsAny(seg, "*") || seg != is[i] {
+			return false
+		}
+	}
+	return true
+}

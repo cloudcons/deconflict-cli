@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/cloudops/agentclaims/internal/claim"
 )
 
 // PR overlap detection, which is deliberately independent of the claim
@@ -146,6 +148,13 @@ func cmdPROverlap(args []string, out io.Writer) error {
 	}
 	g := newGH(*api, token)
 
+	// The ignore list is operator-configured and shared with the claim
+	// registry, so CI and the agents agree on what counts as noise.
+	var ignore []string
+	if st, err := openStore(""); err == nil {
+		ignore = st.Settings().IgnorePaths
+	}
+
 	mine, truncated, err := g.files(*repo, *num, *maxFiles)
 	if err != nil {
 		return err
@@ -184,7 +193,9 @@ func cmdPROverlap(args []string, out io.Writer) error {
 		}
 		var shared []string
 		for f := range theirs {
-			if mine[f] {
+			// Lockfiles and generated files collide on essentially every pair
+			// of PRs. Reporting them is how a bot like this gets muted.
+			if mine[f] && !claim.IsIgnored(f, ignore) {
 				shared = append(shared, f)
 			}
 		}

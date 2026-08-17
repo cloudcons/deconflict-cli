@@ -163,7 +163,7 @@ func preToolContext(dsn, cwd string, in hookInput) string {
 	if id := readCurrent(cwd); id != "" {
 		mine[id] = true
 	}
-	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), []string{rel}, now, mine)
+	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), []string{rel}, now, mine, st.Settings().IgnorePaths)
 	if len(conflicts) == 0 {
 		return ""
 	}
