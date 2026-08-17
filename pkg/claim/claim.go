@@ -212,12 +212,41 @@ func FindOverlaps(claims []Claim, repo string, paths []string, now time.Time, ex
 			continue
 		}
 		pairs := PatternsOverlap(query, c.Paths)
+		pairs = dropDisclaimed(pairs, c.NotPaths)
 		if len(pairs) == 0 {
 			continue
 		}
 		out = append(out, Conflict{Other: c, Pairs: pairs})
 	}
 	return out
+}
+
+// dropDisclaimed removes pairs whose queried path the claimant explicitly said
+// they are not touching.
+//
+// "I am reworking src/auth, but NOT middleware.go" means middleware.go is free,
+// so warning about it is a false positive — and false positives are how an
+// advisory tool gets muted. Applied only to concrete query paths, where Covers
+// is exact; a glob-vs-glob comparison cannot prove the whole queried area is
+// disclaimed, so it keeps the warning.
+func dropDisclaimed(pairs [][2]string, notPaths []string) [][2]string {
+	if len(notPaths) == 0 {
+		return pairs
+	}
+	var kept [][2]string
+	for _, p := range pairs {
+		disclaimed := false
+		for _, n := range notPaths {
+			if Covers(n, p[0]) {
+				disclaimed = true
+				break
+			}
+		}
+		if !disclaimed {
+			kept = append(kept, p)
+		}
+	}
+	return kept
 }
 
 // Pair is a mutual overlap between two active claims, for the dashboard.

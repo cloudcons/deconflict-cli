@@ -133,22 +133,15 @@ func sessionContext(dsn, cwd string) string {
 	return b.String()
 }
 
-var writeTools = map[string]bool{"Edit": true, "Write": true, "NotebookEdit": true, "MultiEdit": true}
-
 func preToolContext(dsn, cwd string, in hookInput) string {
-	if !writeTools[in.ToolName] {
-		return ""
-	}
-	fp, _ := in.ToolInput["file_path"].(string)
-	if fp == "" {
+	targets := editedPaths(in.ToolName, in.ToolInput)
+	if len(targets) == 0 {
 		return ""
 	}
 	root := gitinfo.Root(cwd)
-	rel := fp
-	if root != "" {
-		if r, err := filepath.Rel(root, fp); err == nil && !strings.HasPrefix(r, "..") {
-			rel = r
-		}
+	var rels []string
+	for _, t := range targets {
+		rels = append(rels, relToRepo(root, t))
 	}
 	st, err := openStore(dsn)
 	if err != nil {
@@ -163,22 +156,28 @@ func preToolContext(dsn, cwd string, in hookInput) string {
 	if id := readCurrent(cwd); id != "" {
 		mine[id] = true
 	}
-	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), []string{rel}, now, mine, st.Settings().IgnorePaths)
+	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), rels, now, mine, st.Settings().IgnorePaths)
 	if len(conflicts) == 0 {
 		return ""
 	}
 	// Say each thing once per session. Repeating an identical warning on every
-	// edit burns context and trains the model to skim past it.
+	// edit burns context and trains the model to skim past it. One patch can
+	// touch several files, so the key covers the whole set.
+	key := strings.Join(rels, ",")
 	var fresh []claim.Conflict
 	for _, c := range conflicts {
-		if markSeen(in.SessionID, c.Other.ID+"|"+rel) {
+		if markSeen(in.SessionID, c.Other.ID+"|"+key) {
 			fresh = append(fresh, c)
 		}
 	}
 	if len(fresh) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("You are about to edit %s, which another agent has claimed.\n\n%s", rel, claim.Render(fresh, now))
+	what := rels[0]
+	if len(rels) > 1 {
+		what = strings.Join(rels, ", ")
+	}
+	return fmt.Sprintf("You are about to edit %s, which another agent has claimed.\n\n%s", what, claim.Render(fresh, now))
 }
 
 // markSeen records a (session, key) pair and reports whether it was new.

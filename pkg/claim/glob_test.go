@@ -1,6 +1,9 @@
 package claim
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestOverlap(t *testing.T) {
 	cases := []struct {
@@ -119,5 +122,29 @@ func TestCoversIsContainmentNotIntersection(t *testing.T) {
 		if got := Covers(c.outer, c.inner); got != c.want {
 			t.Errorf("Covers(%q,%q) = %v, want %v — %s", c.outer, c.inner, got, c.want, c.note)
 		}
+	}
+}
+
+func TestFindOverlapsRespectsNotTouching(t *testing.T) {
+	now := time.Now().UTC()
+	held := []Claim{{
+		ID: "x1", Repo: "r", Agent: "ana", What: "rework auth",
+		Paths:    []string{"src/auth", "src/auth/**"},
+		NotPaths: []string{"src/auth/middleware.go"},
+		Created:  now.Add(-time.Minute), Expires: now.Add(time.Hour),
+	}}
+
+	// A file the claimant explicitly disclaimed is free — no warning.
+	if got := FindOverlaps(held, "r", []string{"src/auth/middleware.go"}, now, nil, nil); len(got) != 0 {
+		t.Errorf("warned about an explicitly disclaimed file: %+v", got)
+	}
+	// Any other file in the area still warns.
+	if got := FindOverlaps(held, "r", []string{"src/auth/token.go"}, now, nil, nil); len(got) != 1 {
+		t.Errorf("want a warning for a claimed file, got %d", len(got))
+	}
+	// A broad pattern is not disclaimed by one narrow exclusion — the queried
+	// area is wider than what the claimant promised to avoid.
+	if got := FindOverlaps(held, "r", []string{"src/**/*.go"}, now, nil, nil); len(got) != 1 {
+		t.Errorf("a narrow NOT line wrongly suppressed a broad query: %+v", got)
 	}
 }
