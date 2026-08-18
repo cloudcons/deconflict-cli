@@ -42,6 +42,8 @@ Everything else
   deconflict settings [--json]               what the operator has configured
   deconflict serve   [--addr :7777] [--db postgres://…]  registry + control panel
   deconflict genkey                          a key for sealing integration secrets
+  deconflict install [--agent claude|codex|all] [--scope project|user] [--dry-run]
+                                             hooks + skill, for the agents you run
   deconflict hook    <session-start|pre-tool|user-prompt>
 
 Store: $DECONFLICT_STORE (file:/path or http://host:port), default local file.
@@ -76,6 +78,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdServe(rest, stdout)
 	case "hook":
 		err = cmdHook(rest, stdout)
+	case "install":
+		err = cmdInstall(rest, stdout)
 	case "login":
 		err = cmdLogin(rest, stdout)
 	case "logout":
