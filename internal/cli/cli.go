@@ -39,7 +39,6 @@ Work tracker
   deconflict plugins <list|providers|test|deliveries|retry>
 
 Everything else
-  deconflict pr-overlap --repo o/n --pr N [--comment]   which open PRs share files
   deconflict settings [--json]               what the operator has configured
   deconflict serve   [--addr :7777] [--db postgres://…]  registry + control panel
   deconflict genkey                          a key for sealing integration secrets
@@ -73,8 +72,6 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdReconcile(rest, stdout)
 	case "settings":
 		err = cmdSettings(rest, stdout)
-	case "pr-overlap":
-		err = cmdPROverlap(rest, stdout)
 	case "serve":
 		err = cmdServe(rest, stdout)
 	case "hook":
