@@ -25,7 +25,7 @@ type Store interface {
 	// Settings lets a client honour operator-set defaults — the lease length,
 	// the ignore list, whether --why is mandatory. Without this the control
 	// panel would only configure the server, and the knobs that matter are the
-	// ones that change what the next `claims claim` does.
+	// ones that change what the next `deconflict claim` does.
 	Settings() settings.Settings
 	Describe() string
 }
@@ -86,7 +86,7 @@ func OpenCtx(ctx context.Context, dsn string) (Store, error) {
 		// A direct database connection is the server's path, and an escape
 		// hatch for an operator debugging one. It is not how agents should
 		// reach the registry: a client with the database credentials bypasses
-		// every permission check in the server, so `claims claim` against this
+		// every permission check in the server, so `deconflict claim` against this
 		// DSN records an unattributed claim on purpose.
 		pool, err := db.Open(ctx, dsn)
 		if err != nil {

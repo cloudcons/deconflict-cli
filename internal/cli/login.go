@@ -14,7 +14,7 @@ import (
 	"github.com/cloudcons/deconflict/internal/store"
 )
 
-// `claims login` — the device flow, from the terminal's side.
+// `deconflict login` — the device flow, from the terminal's side.
 //
 // The obvious design is "paste your token here", and it is wrong for the same
 // reason it is wrong everywhere: a credential typed at a shell prompt is a
@@ -110,7 +110,7 @@ func cmdLogout(args []string, out io.Writer) error {
 	} else {
 		fmt.Fprintf(out, "forgot the token for %s.\n", base)
 	}
-	fmt.Fprintln(out, "the token itself is still valid — revoke it in the control panel or with `claims token revoke <id>`.")
+	fmt.Fprintln(out, "the token itself is still valid — revoke it in the control panel or with `deconflict token revoke <id>`.")
 	return nil
 }
 
@@ -242,13 +242,13 @@ func cmdToken(args []string, out io.Writer) error {
 		// people do not scroll back for a secret they were not told to keep.
 		fmt.Fprintf(out, "%s\n\n", tok.Secret)
 		fmt.Fprintf(out, "id %s (%s). This is the only time it will be shown.\n", tok.ID, tok.Name)
-		fmt.Fprintf(out, "Give it to an agent as DECONFLICT_TOKEN, or run `claims login` on that machine instead.\n")
+		fmt.Fprintf(out, "Give it to an agent as DECONFLICT_TOKEN, or run `deconflict login` on that machine instead.\n")
 		return nil
 
 	case "revoke":
 		id := fs.Arg(0)
 		if id == "" {
-			return fmt.Errorf("which token? `claims token list` shows the ids")
+			return fmt.Errorf("which token? `deconflict token list` shows the ids")
 		}
 		if err := apiJSON(http.MethodDelete, base+"/api/tokens/"+urlEscape(id), token, nil, nil); err != nil {
 			return err
@@ -273,7 +273,7 @@ func resolveServer(explicit string) (string, error) {
 		return "", fmt.Errorf("no registry URL: pass --server, or set DECONFLICT_STORE=http://host:7777")
 	}
 	if !strings.HasPrefix(v, "http://") && !strings.HasPrefix(v, "https://") {
-		return "", fmt.Errorf("%q is a local file store — accounts only exist on a `claims serve` registry", v)
+		return "", fmt.Errorf("%q is a local file store — accounts only exist on a `deconflict serve` registry", v)
 	}
 	return strings.TrimRight(v, "/"), nil
 }
@@ -315,7 +315,7 @@ func apiJSONStatus(method, url, token string, body, out any) (int, error) {
 			msg = resp.Status
 		}
 		if resp.StatusCode == http.StatusUnauthorized {
-			msg += " — run `claims login`"
+			msg += " — run `deconflict login`"
 		}
 		return resp.StatusCode, fmt.Errorf("%s", msg)
 	}

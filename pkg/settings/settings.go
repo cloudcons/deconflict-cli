@@ -2,7 +2,7 @@
 //
 // Every field here is load-bearing on both sides: the server enforces what only
 // it can (reaping, webhooks), and clients fetch the rest so that changing a
-// default in the control panel actually changes what the next `claims claim`
+// default in the control panel actually changes what the next `deconflict claim`
 // does. A settings page whose values only decorate the page it lives on is
 // worse than no settings page.
 package settings

@@ -111,7 +111,7 @@ func cmdPlugins(args []string, out io.Writer) error {
 	case "test":
 		id := fs.Arg(0)
 		if id == "" {
-			return fmt.Errorf("which integration? `claims plugins list` shows the ids")
+			return fmt.Errorf("which integration? `deconflict plugins list` shows the ids")
 		}
 		var res struct {
 			OK      bool   `json:"ok"`

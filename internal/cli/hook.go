@@ -115,7 +115,7 @@ func sessionContext(dsn, cwd string) string {
 	b.WriteString("Other agents are currently working in this repository (advisory claims):\n")
 	for i, c := range active {
 		if i == 8 {
-			fmt.Fprintf(&b, "\n  ...and %d more (`claims list`).\n", len(active)-i)
+			fmt.Fprintf(&b, "\n  ...and %d more (`deconflict list`).\n", len(active)-i)
 			break
 		}
 		fmt.Fprintf(&b, "\n  [%s] %s (%s ago): %s\n", c.ID, c.Agent, c.Age(now), c.What)
@@ -127,9 +127,9 @@ func sessionContext(dsn, cwd string) string {
 			fmt.Fprintf(&b, "    interface changes: %s\n", c.Interface)
 		}
 	}
-	b.WriteString("\nBefore editing files in those areas, run `claims check --file <path>`. " +
+	b.WriteString("\nBefore editing files in those areas, run `deconflict check --file <path>`. " +
 		"When you start a task of your own, announce it: " +
-		"`claims claim --paths <globs> --what <text> --why <text> --not <globs>`.\n")
+		"`deconflict claim --paths <globs> --what <text> --why <text> --not <globs>`.\n")
 	return b.String()
 }
 

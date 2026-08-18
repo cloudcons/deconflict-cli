@@ -12,7 +12,7 @@ import (
 	"github.com/cloudcons/deconflict/internal/settings"
 )
 
-// HTTPStore talks to `claims serve` — the shared-registry backend for a team.
+// HTTPStore talks to `deconflict serve` — the shared-registry backend for a team.
 type HTTPStore struct {
 	Base   string
 	Token  string
@@ -61,7 +61,7 @@ func (h *HTTPStore) do(method, path string, body any) ([]byte, error) {
 		// command away — saying so here saves reading the server log.
 		switch resp.StatusCode {
 		case http.StatusUnauthorized:
-			return nil, fmt.Errorf("%s rejected this credential — run `claims login --server %s`", h.Base, h.Base)
+			return nil, fmt.Errorf("%s rejected this credential — run `deconflict login --server %s`", h.Base, h.Base)
 		case http.StatusForbidden:
 			return nil, fmt.Errorf("%s: %s", h.Base, bytes.TrimSpace(b))
 		}

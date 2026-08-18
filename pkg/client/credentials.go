@@ -16,7 +16,7 @@ import (
 // wins when set: that is what CI uses, and an explicit variable should always
 // beat a file somebody forgot about.
 
-// CredentialsPath is the file `claims login` writes.
+// CredentialsPath is the file `deconflict login` writes.
 func CredentialsPath() string {
 	if p := os.Getenv("DECONFLICT_CREDENTIALS"); p != "" {
 		return p
