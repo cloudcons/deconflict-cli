@@ -1,16 +1,15 @@
 package cli
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"flag"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"sort"
 	"strings"
-	"time"
+
+	"github.com/google/go-github/v75/github"
 
 	"github.com/cloudcons/deconflict/internal/claim"
 )
@@ -27,105 +26,94 @@ import (
 
 const overlapMarker = "<!-- deconflict:pr-overlap -->"
 
-type ghPR struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	Draft  bool   `json:"draft"`
-	State  string `json:"state"`
-	User   struct {
-		Login string `json:"login"`
-	} `json:"user"`
-	Head struct {
-		Ref string `json:"ref"`
-	} `json:"head"`
-	HTMLURL string `json:"html_url"`
-}
-
-type ghFile struct {
-	Filename string `json:"filename"`
-}
-
+// The GitHub calls go through go-github rather than net/http.
+//
+// It is already a dependency for sign-in, so there is no marginal cost, and it
+// removes the last hand-rolled pagination in the repository. That matters here
+// specifically: this command's whole output is "which other PRs touch these
+// files", and a page loop that stops early does not fail — it reports fewer
+// overlaps than exist, which is the answer the reader will believe.
 type ghClient struct {
-	api   string
-	token string
-	http  *http.Client
+	api *github.Client
 }
 
-func newGH(api, token string) *ghClient {
-	if api == "" {
-		api = "https://api.github.com"
+func newGH(apiURL, token string) (*ghClient, error) {
+	c := github.NewClient(nil)
+	if token != "" {
+		c = c.WithAuthToken(token)
 	}
-	return &ghClient{api: strings.TrimRight(api, "/"), token: token, http: &http.Client{Timeout: 20 * time.Second}}
+	// GITHUB_API_URL is set by Actions and points at Enterprise when that is
+	// where the workflow runs.
+	if apiURL != "" && !strings.Contains(apiURL, "api.github.com") {
+		root := strings.TrimRight(apiURL, "/") + "/"
+		var err error
+		if c, err = c.WithEnterpriseURLs(root, root); err != nil {
+			return nil, err
+		}
+	}
+	return &ghClient{api: c}, nil
 }
 
-func (g *ghClient) get(path string, out any) error {
-	req, err := http.NewRequest(http.MethodGet, g.api+path, nil)
-	if err != nil {
-		return err
+// splitRepo turns "owner/name" into its halves, which is what every go-github
+// call wants and what CI hands us as one string.
+func splitRepo(full string) (owner, name string, err error) {
+	owner, name, ok := strings.Cut(strings.TrimSpace(full), "/")
+	if !ok || owner == "" || name == "" {
+		return "", "", fmt.Errorf("--repo should be owner/name, got %q", full)
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	if g.token != "" {
-		req.Header.Set("Authorization", "Bearer "+g.token)
-	}
-	resp, err := g.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	b, _ := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
-	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("GET %s: %s: %s", path, resp.Status, bytes.TrimSpace(b))
-	}
-	return json.Unmarshal(b, out)
+	return owner, name, nil
 }
 
-func (g *ghClient) post(path string, body any) error {
-	b, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequest(http.MethodPost, g.api+path, bytes.NewReader(b))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("Content-Type", "application/json")
-	if g.token != "" {
-		req.Header.Set("Authorization", "Bearer "+g.token)
-	}
-	resp, err := g.http.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	rb, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("POST %s: %s: %s", path, resp.Status, bytes.TrimSpace(rb))
-	}
-	return nil
-}
-
-// files lists a PR's changed files, capped. GitHub paginates at 100 and stops
-// at 3000; a PR past the cap is reported as truncated rather than silently
-// half-compared — a silent cap reads as "covered everything" when it did not.
-func (g *ghClient) files(repo string, num, cap int) (map[string]bool, bool, error) {
+// files lists a PR's changed files, capped. GitHub stops at 3000 files; a PR
+// past the cap is reported as truncated rather than silently half-compared — a
+// silent cap reads as "covered everything" when it did not.
+func (g *ghClient) files(ctx context.Context, owner, name string, num, cap int) (map[string]bool, bool, error) {
 	out := map[string]bool{}
-	for page := 1; page <= 30; page++ {
-		var batch []ghFile
-		if err := g.get(fmt.Sprintf("/repos/%s/pulls/%d/files?per_page=100&page=%d", repo, num, page), &batch); err != nil {
+	opts := &github.ListOptions{PerPage: 100}
+	for {
+		batch, resp, err := g.api.PullRequests.ListFiles(ctx, owner, name, num, opts)
+		if err != nil {
 			return out, false, err
 		}
 		for _, f := range batch {
-			out[f.Filename] = true
-		}
-		if len(batch) < 100 {
-			return out, false, nil
+			out[f.GetFilename()] = true
 		}
 		if len(out) >= cap {
 			return out, true, nil
 		}
+		if resp == nil || resp.NextPage == 0 {
+			return out, false, nil
+		}
+		opts.Page = resp.NextPage
 	}
-	return out, true, nil
+}
+
+// openPRs lists every open pull request, following pagination to the end. The
+// previous version stopped after ten pages, which on a busy repository quietly
+// compared against a subset.
+func (g *ghClient) openPRs(ctx context.Context, owner, name string) ([]*github.PullRequest, error) {
+	var all []*github.PullRequest
+	opts := &github.PullRequestListOptions{
+		State:       "open",
+		ListOptions: github.ListOptions{PerPage: 100},
+	}
+	for {
+		batch, resp, err := g.api.PullRequests.List(ctx, owner, name, opts)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, batch...)
+		if resp == nil || resp.NextPage == 0 {
+			return all, nil
+		}
+		opts.Page = resp.NextPage
+	}
+}
+
+func (g *ghClient) comment(ctx context.Context, owner, name string, num int, body string) error {
+	_, _, err := g.api.Issues.CreateComment(ctx, owner, name, num,
+		&github.IssueComment{Body: github.Ptr(body)})
+	return err
 }
 
 func cmdPROverlap(args []string, out io.Writer) error {
@@ -146,7 +134,15 @@ func cmdPROverlap(args []string, out io.Writer) error {
 	if token == "" {
 		token = os.Getenv("GH_TOKEN")
 	}
-	g := newGH(*api, token)
+	owner, name, err := splitRepo(*repo)
+	if err != nil {
+		return err
+	}
+	g, err := newGH(*api, token)
+	if err != nil {
+		return err
+	}
+	ctx := context.Background()
 
 	// The ignore list is operator-configured and shared with the claim
 	// registry, so CI and the agents agree on what counts as noise.
@@ -155,7 +151,7 @@ func cmdPROverlap(args []string, out io.Writer) error {
 		ignore = st.Settings().IgnorePaths
 	}
 
-	mine, truncated, err := g.files(*repo, *num, *maxFiles)
+	mine, truncated, err := g.files(ctx, owner, name, *num, *maxFiles)
 	if err != nil {
 		return err
 	}
@@ -164,31 +160,24 @@ func cmdPROverlap(args []string, out io.Writer) error {
 		return nil
 	}
 
-	var open []ghPR
-	for page := 1; page <= 10; page++ {
-		var batch []ghPR
-		if err := g.get(fmt.Sprintf("/repos/%s/pulls?state=open&per_page=100&page=%d", *repo, page), &batch); err != nil {
-			return err
-		}
-		open = append(open, batch...)
-		if len(batch) < 100 {
-			break
-		}
+	open, err := g.openPRs(ctx, owner, name)
+	if err != nil {
+		return err
 	}
 
 	type hit struct {
-		pr        ghPR
+		pr        *github.PullRequest
 		shared    []string
 		truncated bool
 	}
 	var hits []hit
 	for _, p := range open {
-		if p.Number == *num || (!*includeDrafts && p.Draft) {
+		if p.GetNumber() == *num || (!*includeDrafts && p.GetDraft()) {
 			continue
 		}
-		theirs, tr, err := g.files(*repo, p.Number, *maxFiles)
+		theirs, tr, err := g.files(ctx, owner, name, p.GetNumber(), *maxFiles)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "claims: skipping PR #%d: %v\n", p.Number, err)
+			fmt.Fprintf(os.Stderr, "deconflict: skipping PR #%d: %v\n", p.GetNumber(), err)
 			continue
 		}
 		var shared []string
@@ -218,7 +207,8 @@ func cmdPROverlap(args []string, out io.Writer) error {
 	fmt.Fprintf(&b, "**This PR touches files that %d other open PR(s) also touch.**\n\n", len(hits))
 	for _, h := range hits {
 		fmt.Fprintf(&b, "- **#%d** %s — @%s (`%s`) — %d shared file(s)\n",
-			h.pr.Number, h.pr.Title, h.pr.User.Login, h.pr.Head.Ref, len(h.shared))
+			h.pr.GetNumber(), h.pr.GetTitle(), h.pr.GetUser().GetLogin(),
+			h.pr.GetHead().GetRef(), len(h.shared))
 		show := h.shared
 		if len(show) > 10 {
 			show = show[:10]
@@ -237,8 +227,7 @@ func cmdPROverlap(args []string, out io.Writer) error {
 
 	fmt.Fprint(out, b.String())
 	if *comment {
-		if err := g.post(fmt.Sprintf("/repos/%s/issues/%d/comments", *repo, *num),
-			map[string]string{"body": b.String()}); err != nil {
+		if err := g.comment(ctx, owner, name, *num, b.String()); err != nil {
 			return err
 		}
 		fmt.Fprintf(out, "\nposted to %s#%d\n", *repo, *num)
