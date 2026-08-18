@@ -27,7 +27,7 @@ func cmdPlugins(args []string, out io.Writer) error {
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("plugins", flag.ContinueOnError)
-	serverURL := fs.String("server", "", "registry URL (default: $AGENTCLAIMS_STORE)")
+	serverURL := fs.String("server", "", "registry URL (default: $DECONFLICT_STORE)")
 	asJSON := fs.Bool("json", false, "emit JSON")
 	limit := fs.Int("limit", 25, "how many deliveries to show")
 	if err := fs.Parse(rest); err != nil {
@@ -73,7 +73,7 @@ func cmdPlugins(args []string, out io.Writer) error {
 			fmt.Fprintf(out, "    secret: %s\n", map[bool]string{true: "set", false: "none"}[in.HasSecret])
 		}
 		if !state.KeyPresent {
-			fmt.Fprintln(out, "\nno AGENTCLAIMS_SECRET_KEY on the server — integrations needing an API key cannot be saved.")
+			fmt.Fprintln(out, "\nno DECONFLICT_SECRET_KEY on the server — integrations needing an API key cannot be saved.")
 		}
 		return nil
 
@@ -179,7 +179,7 @@ func cmdTask(args []string, out io.Writer) error {
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("task", flag.ContinueOnError)
-	serverURL := fs.String("server", "", "registry URL (default: $AGENTCLAIMS_STORE)")
+	serverURL := fs.String("server", "", "registry URL (default: $DECONFLICT_STORE)")
 	asJSON := fs.Bool("json", false, "emit JSON")
 	if err := fs.Parse(rest); err != nil {
 		return err
@@ -247,7 +247,7 @@ func cmdTask(args []string, out io.Writer) error {
 // deployment decision — a systemd EnvironmentFile, a secrets manager, Infisical
 // — and a tool that guesses would be wrong most of the time.
 func cmdGenkey(args []string, out io.Writer) error {
-	fmt.Fprintf(out, "AGENTCLAIMS_SECRET_KEY=%s\n", plugin.GenerateKey())
+	fmt.Fprintf(out, "DECONFLICT_SECRET_KEY=%s\n", plugin.GenerateKey())
 	fmt.Fprintf(out, "\nIntegration API keys are sealed with this. Losing it means re-entering every\n")
 	fmt.Fprintf(out, "integration's credential; changing it means the same. Store it where the rest\n")
 	fmt.Fprintf(out, "of this deployment's secrets live, not in the repository.\n")

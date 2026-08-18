@@ -187,7 +187,7 @@ func markSeen(session, key string) bool {
 		return true
 	}
 	sum := sha256.Sum256([]byte(session))
-	dir := filepath.Join(os.TempDir(), "agentclaims-seen")
+	dir := filepath.Join(os.TempDir(), "deconflict-seen")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return true
 	}

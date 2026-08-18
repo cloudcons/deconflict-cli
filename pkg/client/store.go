@@ -61,7 +61,7 @@ func AppendWith(ctx context.Context, st Store, e claim.Event) error {
 // Open resolves a store from a DSN, falling back to the local default.
 //
 //	file:/path/to/claims.jsonl   (or a bare path)
-//	http://host:port             (+ AGENTCLAIMS_TOKEN for a bearer token)
+//	http://host:port             (+ DECONFLICT_TOKEN for a bearer token)
 //	postgres://user@host/db      (direct, for the server and for operators)
 func Open(dsn string) (Store, error) { return OpenCtx(context.Background(), dsn) }
 
@@ -69,7 +69,7 @@ func Open(dsn string) (Store, error) { return OpenCtx(context.Background(), dsn)
 // connect and migrate.
 func OpenCtx(ctx context.Context, dsn string) (Store, error) {
 	if dsn == "" {
-		dsn = os.Getenv("AGENTCLAIMS_STORE")
+		dsn = os.Getenv("DECONFLICT_STORE")
 	}
 	if dsn == "" {
 		dsn = "file:" + DefaultPath()
@@ -107,16 +107,16 @@ func OpenCtx(ctx context.Context, dsn string) (Store, error) {
 
 // DefaultPath is the per-machine log, which is all a single box needs.
 func DefaultPath() string {
-	if p := os.Getenv("AGENTCLAIMS_FILE"); p != "" {
+	if p := os.Getenv("DECONFLICT_FILE"); p != "" {
 		return p
 	}
 	base := os.Getenv("XDG_STATE_HOME")
 	if base == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return filepath.Join(os.TempDir(), "agentclaims", "claims.jsonl")
+			return filepath.Join(os.TempDir(), "deconflict", "claims.jsonl")
 		}
 		base = filepath.Join(home, ".local", "state")
 	}
-	return filepath.Join(base, "agentclaims", "claims.jsonl")
+	return filepath.Join(base, "deconflict", "claims.jsonl")
 }

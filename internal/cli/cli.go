@@ -17,35 +17,35 @@ import (
 	"github.com/cloudcons/deconflict/internal/store"
 )
 
-const usage = `claims — advisory intention claims for agents working one repo in parallel
+const usage = `deconflict — advisory intention claims for agents working one repo in parallel
 
 Claiming
-  claims claim   --paths <glob,...> --what <text> [--why ...] [--not ...] [--task <ref>]
-  claims check   [--paths <glob,...>] [--file <path>]   what overlaps this area
-  claims list    [--all] [--repo <id>] [--json]
-  claims release [id] [--reason merged|abandoned|superseded] [--pr <url>]
-  claims renew   [id] [--ttl 8h]
-  claims status                          my claim, with git-derived progress
-  claims reconcile [--apply]             close claims whose branch is merged
+  deconflict claim   --paths <glob,...> --what <text> [--why ...] [--not ...] [--task <ref>]
+  deconflict check   [--paths <glob,...>] [--file <path>]   what overlaps this area
+  deconflict list    [--all] [--repo <id>] [--json]
+  deconflict release [id] [--reason merged|abandoned|superseded] [--pr <url>]
+  deconflict renew   [id] [--ttl 8h]
+  deconflict status                          my claim, with git-derived progress
+  deconflict reconcile [--apply]             close claims whose branch is merged
 
 Account (registries with accounts enabled)
-  claims login   [--server URL]          sign in through a browser, once
-  claims logout  [--all]
-  claims whoami                          who this machine is, and what is enabled
-  claims token   <list|create|revoke>    personal API tokens for agents
+  deconflict login   [--server URL]          sign in through a browser, once
+  deconflict logout  [--all]
+  deconflict whoami                          who this machine is, and what is enabled
+  deconflict token   <list|create|revoke>    personal API tokens for agents
 
 Work tracker
-  claims task    <resolve|search>        look up a work item before claiming it
-  claims plugins <list|providers|test|deliveries|retry>
+  deconflict task    <resolve|search>        look up a work item before claiming it
+  deconflict plugins <list|providers|test|deliveries|retry>
 
 Everything else
-  claims pr-overlap --repo o/n --pr N [--comment]   which open PRs share files
-  claims settings [--json]               what the operator has configured
-  claims serve   [--addr :7777] [--db postgres://…]  registry + control panel
-  claims genkey                          a key for sealing integration secrets
-  claims hook    <session-start|pre-tool|user-prompt>
+  deconflict pr-overlap --repo o/n --pr N [--comment]   which open PRs share files
+  deconflict settings [--json]               what the operator has configured
+  deconflict serve   [--addr :7777] [--db postgres://…]  registry + control panel
+  deconflict genkey                          a key for sealing integration secrets
+  deconflict hook    <session-start|pre-tool|user-prompt>
 
-Store: $AGENTCLAIMS_STORE (file:/path or http://host:port), default local file.
+Store: $DECONFLICT_STORE (file:/path or http://host:port), default local file.
 `
 
 // Run dispatches a subcommand. Returns a process exit code.
@@ -125,7 +125,7 @@ func splitList(s string) []string {
 }
 
 func agentID() string {
-	if v := os.Getenv("AGENTCLAIMS_AGENT"); v != "" {
+	if v := os.Getenv("DECONFLICT_AGENT"); v != "" {
 		return v
 	}
 	user := os.Getenv("USER")
@@ -146,7 +146,7 @@ func currentPath(dir string) string {
 	out, err := exec.Command("git", "-C", dir, "rev-parse", "--absolute-git-dir").Output()
 	if err == nil {
 		if g := strings.TrimSpace(string(out)); g != "" {
-			return filepath.Join(g, "agentclaims-current")
+			return filepath.Join(g, "deconflict-current")
 		}
 	}
 	return filepath.Join(filepath.Dir(store.DefaultPath()), "current")
@@ -546,7 +546,7 @@ func cmdReconcile(args []string, out io.Writer) error {
 	repo := gitinfo.Repo(cwd)
 	base := gitinfo.BaseRef(cwd)
 	if base == "" {
-		return fmt.Errorf("no published base branch found (set AGENTCLAIMS_BASE)")
+		return fmt.Errorf("no published base branch found (set DECONFLICT_BASE)")
 	}
 	now := time.Now().UTC()
 	n := 0

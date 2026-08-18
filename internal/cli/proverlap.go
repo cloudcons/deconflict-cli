@@ -25,7 +25,7 @@ import (
 // warns before the edit; this catches what the registry missed, at the point
 // the overlap becomes a fact.
 
-const overlapMarker = "<!-- agentclaims:pr-overlap -->"
+const overlapMarker = "<!-- deconflict:pr-overlap -->"
 
 type ghPR struct {
 	Number int    `json:"number"`

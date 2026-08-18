@@ -45,7 +45,7 @@ var scpLike = regexp.MustCompile(`^[\w.+-]+@([\w.-]+):(.+)$`)
 // back to the directory name so the tool still works outside a remote-backed
 // repo.
 func Repo(dir string) string {
-	if v := os.Getenv("AGENTCLAIMS_REPO"); v != "" {
+	if v := os.Getenv("DECONFLICT_REPO"); v != "" {
 		return v
 	}
 	root := Root(dir)
@@ -110,7 +110,7 @@ func ChangedPaths(dir, base string) []string {
 // BaseRef resolves the published base branch — the thing a claim is measured
 // against. Prefers an explicit override, then upstream/, then origin/.
 func BaseRef(dir string) string {
-	if v := os.Getenv("AGENTCLAIMS_BASE"); v != "" {
+	if v := os.Getenv("DECONFLICT_BASE"); v != "" {
 		return v
 	}
 	for _, c := range []string{"upstream/main", "origin/main", "upstream/master", "origin/master"} {

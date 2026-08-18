@@ -11,25 +11,25 @@ import (
 // Where a signed-in CLI keeps its token.
 //
 // Per-server rather than one global value, because a laptop that works on two
-// teams' registries is normal and a single AGENTCLAIMS_TOKEN would have it
+// teams' registries is normal and a single DECONFLICT_TOKEN would have it
 // sending one team's credential to the other. The environment variable still
 // wins when set: that is what CI uses, and an explicit variable should always
 // beat a file somebody forgot about.
 
 // CredentialsPath is the file `claims login` writes.
 func CredentialsPath() string {
-	if p := os.Getenv("AGENTCLAIMS_CREDENTIALS"); p != "" {
+	if p := os.Getenv("DECONFLICT_CREDENTIALS"); p != "" {
 		return p
 	}
 	base := os.Getenv("XDG_CONFIG_HOME")
 	if base == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return filepath.Join(os.TempDir(), "agentclaims", "credentials.json")
+			return filepath.Join(os.TempDir(), "deconflict", "credentials.json")
 		}
 		base = filepath.Join(home, ".config")
 	}
-	return filepath.Join(base, "agentclaims", "credentials.json")
+	return filepath.Join(base, "deconflict", "credentials.json")
 }
 
 type credentials struct {
@@ -54,7 +54,7 @@ func loadCredentials() credentials {
 // TokenFor resolves the credential for a registry: the environment first, then
 // the credentials file.
 func TokenFor(base string) string {
-	if v := strings.TrimSpace(os.Getenv("AGENTCLAIMS_TOKEN")); v != "" {
+	if v := strings.TrimSpace(os.Getenv("DECONFLICT_TOKEN")); v != "" {
 		return v
 	}
 	credMu.Lock()

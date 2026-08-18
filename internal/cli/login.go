@@ -29,7 +29,7 @@ import (
 
 func cmdLogin(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
-	serverURL := fs.String("server", "", "registry URL (default: $AGENTCLAIMS_STORE)")
+	serverURL := fs.String("server", "", "registry URL (default: $DECONFLICT_STORE)")
 	timeout := fs.Duration("timeout", 5*time.Minute, "how long to wait for approval")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -87,7 +87,7 @@ func cmdLogin(args []string, out io.Writer) error {
 
 func cmdLogout(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("logout", flag.ContinueOnError)
-	serverURL := fs.String("server", "", "registry URL (default: $AGENTCLAIMS_STORE)")
+	serverURL := fs.String("server", "", "registry URL (default: $DECONFLICT_STORE)")
 	all := fs.Bool("all", false, "forget every registry")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -116,7 +116,7 @@ func cmdLogout(args []string, out io.Writer) error {
 
 func cmdWhoami(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("whoami", flag.ContinueOnError)
-	serverURL := fs.String("server", "", "registry URL (default: $AGENTCLAIMS_STORE)")
+	serverURL := fs.String("server", "", "registry URL (default: $DECONFLICT_STORE)")
 	asJSON := fs.Bool("json", false, "emit JSON")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -183,7 +183,7 @@ func cmdToken(args []string, out io.Writer) error {
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("token", flag.ContinueOnError)
-	serverURL := fs.String("server", "", "registry URL (default: $AGENTCLAIMS_STORE)")
+	serverURL := fs.String("server", "", "registry URL (default: $DECONFLICT_STORE)")
 	name := fs.String("name", "", "a label for a new token, e.g. \"ci\" or \"laptop agent\"")
 	days := fs.Int("days", 0, "expire after this many days (0 = never)")
 	if err := fs.Parse(rest); err != nil {
@@ -242,7 +242,7 @@ func cmdToken(args []string, out io.Writer) error {
 		// people do not scroll back for a secret they were not told to keep.
 		fmt.Fprintf(out, "%s\n\n", tok.Secret)
 		fmt.Fprintf(out, "id %s (%s). This is the only time it will be shown.\n", tok.ID, tok.Name)
-		fmt.Fprintf(out, "Give it to an agent as AGENTCLAIMS_TOKEN, or run `claims login` on that machine instead.\n")
+		fmt.Fprintf(out, "Give it to an agent as DECONFLICT_TOKEN, or run `claims login` on that machine instead.\n")
 		return nil
 
 	case "revoke":
@@ -267,10 +267,10 @@ func cmdToken(args []string, out io.Writer) error {
 func resolveServer(explicit string) (string, error) {
 	v := strings.TrimSpace(explicit)
 	if v == "" {
-		v = strings.TrimSpace(os.Getenv("AGENTCLAIMS_STORE"))
+		v = strings.TrimSpace(os.Getenv("DECONFLICT_STORE"))
 	}
 	if v == "" {
-		return "", fmt.Errorf("no registry URL: pass --server, or set AGENTCLAIMS_STORE=http://host:7777")
+		return "", fmt.Errorf("no registry URL: pass --server, or set DECONFLICT_STORE=http://host:7777")
 	}
 	if !strings.HasPrefix(v, "http://") && !strings.HasPrefix(v, "https://") {
 		return "", fmt.Errorf("%q is a local file store — accounts only exist on a `claims serve` registry", v)
