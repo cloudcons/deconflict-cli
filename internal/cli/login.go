@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudcons/agentclaims/internal/store"
+	"github.com/cloudcons/deconflict/internal/store"
 )
 
 // `claims login` — the device flow, from the terminal's side.

@@ -11,9 +11,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cloudcons/agentclaims/internal/gitinfo"
-	"github.com/cloudcons/agentclaims/internal/plugin"
-	"github.com/cloudcons/agentclaims/internal/store"
+	"github.com/cloudcons/deconflict/internal/gitinfo"
+	"github.com/cloudcons/deconflict/internal/plugin"
+	"github.com/cloudcons/deconflict/internal/store"
 )
 
 // Integrations from a terminal. Configuring one is a form-shaped job and stays

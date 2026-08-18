@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudcons/agentclaims/internal/claim"
-	"github.com/cloudcons/agentclaims/internal/db"
-	"github.com/cloudcons/agentclaims/internal/settings"
+	"github.com/cloudcons/deconflict/internal/claim"
+	"github.com/cloudcons/deconflict/internal/db"
+	"github.com/cloudcons/deconflict/internal/settings"
 )
 
 type Store interface {

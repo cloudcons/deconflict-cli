@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/cloudcons/agentclaims/internal/claim"
-	"github.com/cloudcons/agentclaims/internal/settings"
+	"github.com/cloudcons/deconflict/internal/claim"
+	"github.com/cloudcons/deconflict/internal/settings"
 )
 
 // FileStore is an append-only JSONL log on local disk.

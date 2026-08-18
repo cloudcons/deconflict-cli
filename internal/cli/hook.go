@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudcons/agentclaims/internal/claim"
-	"github.com/cloudcons/agentclaims/internal/gitinfo"
+	"github.com/cloudcons/deconflict/internal/claim"
+	"github.com/cloudcons/deconflict/internal/gitinfo"
 )
 
 // Claude Code hook plumbing.
