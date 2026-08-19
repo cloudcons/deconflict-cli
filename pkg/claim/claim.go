@@ -312,6 +312,30 @@ func disclaimed(a, b Claim) bool {
 
 // Render formats conflicts for an agent to read. Terse on purpose: this lands
 // in a context window, at the start of every task, for every agent.
+// RenderBrief is the second and later time a session meets the same claim.
+//
+// The full block answers "should I back off?" — what the other agent is doing,
+// why, and what it promised not to touch. That is worth its length once. Asked
+// again about a different file under the same claim, the agent already holds
+// all of it, and repeating it costs context and teaches the model that these
+// blocks are boilerplate to skim. What it does not yet know is the one fact
+// this line carries: that this file is in there too.
+func RenderBrief(cs []Conflict, now time.Time) string {
+	if len(cs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, c := range cs {
+		var files []string
+		for _, p := range c.Pairs {
+			files = append(files, p[0])
+		}
+		fmt.Fprintf(&b, "Also inside [%s] %s's claim, already described above: %s\n",
+			c.Other.ID, c.Other.Agent, strings.Join(files, ", "))
+	}
+	return b.String()
+}
+
 func Render(cs []Conflict, now time.Time) string {
 	if len(cs) == 0 {
 		return ""

@@ -160,24 +160,55 @@ func preToolContext(dsn, cwd string, in hookInput) string {
 	if len(conflicts) == 0 {
 		return ""
 	}
-	// Say each thing once per session. Repeating an identical warning on every
-	// edit burns context and trains the model to skim past it. One patch can
-	// touch several files, so the key covers the whole set.
+	// Say each thing once per session, and say it at the length it is worth.
+	//
+	// A claim on src/auth/** covers every file under it, and Claude Code asks
+	// once per file — so ten edits inside one claimed area used to inject ten
+	// near-identical blocks. That is the failure this dedup exists to prevent,
+	// arriving through the door the key was too specific to close: it included
+	// the file set, and the file set is different every time.
+	//
+	// So there are two keys. The claim alone decides whether the agent has ever
+	// been told about this claim; the claim plus the file set decides whether it
+	// has been told about these exact files. First meeting gets the full block,
+	// a new file under a known claim gets one line, and the same file twice gets
+	// nothing.
+	//
+	// One patch can touch several files at once, which is why the second key is
+	// the whole set rather than a single path.
 	key := strings.Join(rels, ",")
-	var fresh []claim.Conflict
+	var first, repeat []claim.Conflict
 	for _, c := range conflicts {
-		if markSeen(in.SessionID, c.Other.ID+"|"+key) {
-			fresh = append(fresh, c)
+		switch {
+		case markSeen(in.SessionID, c.Other.ID):
+			// Record the file set too. Without this the first file is the one
+			// file the session never fully remembers: coming back to it later
+			// finds no file key and repeats itself.
+			markSeen(in.SessionID, c.Other.ID+"|"+key)
+			first = append(first, c)
+		case markSeen(in.SessionID, c.Other.ID+"|"+key):
+			repeat = append(repeat, c)
 		}
 	}
-	if len(fresh) == 0 {
+	if len(first) == 0 && len(repeat) == 0 {
 		return ""
 	}
-	what := rels[0]
-	if len(rels) > 1 {
-		what = strings.Join(rels, ", ")
+
+	var b strings.Builder
+	if len(first) > 0 {
+		what := rels[0]
+		if len(rels) > 1 {
+			what = strings.Join(rels, ", ")
+		}
+		fmt.Fprintf(&b, "You are about to edit %s, which another agent has claimed.\n\n%s", what, claim.Render(first, now))
 	}
-	return fmt.Sprintf("You are about to edit %s, which another agent has claimed.\n\n%s", what, claim.Render(fresh, now))
+	if len(repeat) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(claim.RenderBrief(repeat, now))
+	}
+	return b.String()
 }
 
 // markSeen records a (session, key) pair and reports whether it was new.
