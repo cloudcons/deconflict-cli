@@ -243,14 +243,14 @@ func cmdTask(args []string, out io.Writer) error {
 	return fmt.Errorf("unknown task subcommand %q", sub)
 }
 
-// cmdGenkey prints a secret key. It writes nothing: where the key belongs is a
-// deployment decision — a systemd EnvironmentFile, a secrets manager, Infisical
-// — and a tool that guesses would be wrong most of the time.
+// cmdGenkey prints a deployment encryption key. It writes nothing: where the
+// key belongs is a deployment decision — a systemd EnvironmentFile, a secrets
+// manager, Infisical — and a tool that guesses would be wrong most of the time.
 func cmdGenkey(args []string, out io.Writer) error {
 	fmt.Fprintf(out, "DECONFLICT_SECRET_KEY=%s\n", plugin.GenerateKey())
-	fmt.Fprintf(out, "\nIntegration API keys are sealed with this. Losing it means re-entering every\n")
-	fmt.Fprintf(out, "integration's credential; changing it means the same. Store it where the rest\n")
-	fmt.Fprintf(out, "of this deployment's secrets live, not in the repository.\n")
+	fmt.Fprintf(out, "\nOrganization-owned content and integration credentials are encrypted with this.\n")
+	fmt.Fprintf(out, "Losing it makes that data unrecoverable. Store it with this deployment's other\n")
+	fmt.Fprintf(out, "secrets, not in the repository; use `deconflict rotate-key` to replace it.\n")
 	return nil
 }
 

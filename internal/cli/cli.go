@@ -41,7 +41,7 @@ Work tracker
 Everything else
   deconflict settings [--json]               what the operator has configured
   deconflict serve   [--addr :7777] [--db postgres://…]  registry + control panel
-  deconflict genkey                          a key for sealing integration secrets
+  deconflict genkey                          a key for encrypting organization data
   deconflict rotate-key [--db postgres://…] [--apply]    validate or rotate encryption key
   deconflict install [--agent claude|codex|all] [--scope project|user] [--dry-run]
                                              hooks + skill, for the agents you run
