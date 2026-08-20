@@ -42,6 +42,7 @@ Everything else
   deconflict settings [--json]               what the operator has configured
   deconflict serve   [--addr :7777] [--db postgres://…]  registry + control panel
   deconflict genkey                          a key for sealing integration secrets
+  deconflict rotate-key [--db postgres://…] [--apply]    validate or rotate encryption key
   deconflict install [--agent claude|codex|all] [--scope project|user] [--dry-run]
                                              hooks + skill, for the agents you run
   deconflict hook    <session-start|pre-tool|user-prompt>
@@ -94,6 +95,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdTask(rest, stdout)
 	case "genkey":
 		err = cmdGenkey(rest, stdout)
+	case "rotate-key":
+		err = cmdRotateKey(rest, stdout)
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return 0
