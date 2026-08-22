@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -84,6 +85,9 @@ func cmdInstall(args []string, out io.Writer) error {
 			if err := add(installClaudeHooks(settings, bin, *dry)); err != nil {
 				return err
 			}
+			if err := add(installClaudeMCP(filepath.Join(root, ".mcp.json"), bin, *dry)); err != nil {
+				return err
+			}
 			if *withSkill {
 				skillDir := filepath.Join(root, ".claude", "skills", "deconflict")
 				if *scope == "user" {
@@ -108,6 +112,9 @@ func cmdInstall(args []string, out io.Writer) error {
 			if err := add(enableCodexHooks(filepath.Join(home, ".codex", "config.toml"), *dry)); err != nil {
 				return err
 			}
+			if err := add(installCodexMCP(filepath.Join(home, ".codex", "config.toml"), bin, *dry)); err != nil {
+				return err
+			}
 			if *withDoc {
 				if err := add(installGuidance(filepath.Join(root, "AGENTS.md"), *dry)); err != nil {
 					return err
@@ -127,6 +134,68 @@ func cmdInstall(args []string, out io.Writer) error {
 	fmt.Fprintln(out, "Sign in with `deconflict login` if this registry has accounts enabled;")
 	fmt.Fprintln(out, "the hooks stay silent when nobody else is standing on your files.")
 	return nil
+}
+
+func installClaudeMCP(path, bin string, dry bool) (installChange, error) {
+	doc, err := readJSONObject(path)
+	if err != nil {
+		return installChange{}, err
+	}
+	before := jsonString(doc)
+	servers, _ := doc["mcpServers"].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	servers["deconflict"] = map[string]any{"type": "stdio", "command": bin, "args": []any{"mcp"}}
+	doc["mcpServers"] = servers
+	return writeIfChanged(path, before, doc, "Deconflict MCP mailbox", dry)
+}
+
+func installCodexMCP(path, bin string, dry bool) (installChange, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return installChange{}, err
+	}
+	body := string(raw)
+	header := "[mcp_servers.deconflict]"
+	section := header + "\ncommand = " + strconv.Quote(bin) + "\nargs = [\"mcp\"]\n"
+	start := strings.Index(body, header)
+	if start >= 0 {
+		end := len(body)
+		if next := strings.Index(body[start+len(header):], "\n["); next >= 0 {
+			end = start + len(header) + next + 1
+		}
+		old := body[start:end]
+		commandLine := regexp.MustCompile(`(?m)^command\s*=.*$`)
+		argsLine := regexp.MustCompile(`(?m)^args\s*=.*$`)
+		updated := old
+		if commandLine.MatchString(updated) {
+			updated = commandLine.ReplaceAllString(updated, "command = "+strconv.Quote(bin))
+		} else {
+			updated += "\ncommand = " + strconv.Quote(bin)
+		}
+		if argsLine.MatchString(updated) {
+			updated = argsLine.ReplaceAllString(updated, `args = ["mcp"]`)
+		} else {
+			updated += `\nargs = ["mcp"]`
+		}
+		body = body[:start] + updated + body[end:]
+	} else {
+		if body != "" && !strings.HasSuffix(body, "\n") {
+			body += "\n"
+		}
+		body += "\n" + section
+	}
+	if body == string(raw) {
+		return installChange{path, "Deconflict MCP mailbox", "already set"}, nil
+	}
+	if dry {
+		return installChange{path, "Deconflict MCP mailbox", "would set"}, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return installChange{}, err
+	}
+	return installChange{path, "Deconflict MCP mailbox", "updated"}, os.WriteFile(path, []byte(body), 0o644)
 }
 
 // resolveAgents decides which agents to install for. "auto" looks for evidence

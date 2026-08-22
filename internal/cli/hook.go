@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/cloudcons/deconflict/internal/claim"
 	"github.com/cloudcons/deconflict/internal/gitinfo"
+	"github.com/cloudcons/deconflict/internal/messaging"
 )
 
 // Claude Code hook plumbing.
@@ -64,6 +66,12 @@ func cmdHook(args []string, out io.Writer) error {
 	default:
 		return fmt.Errorf("unknown hook kind %q", kind)
 	}
+	if mailbox := mailboxContext(*dsn, cwd, in); mailbox != "" {
+		if text != "" {
+			text += "\n\n"
+		}
+		text += mailbox
+	}
 
 	if text == "" {
 		return nil // silence is the common case; emit nothing at all
@@ -81,6 +89,60 @@ func cmdHook(args []string, out io.Writer) error {
 	}
 	enc := json.NewEncoder(out)
 	return enc.Encode(resp)
+}
+
+// mailboxContext bridges independently launched agent sessions. Hooks cannot
+// wake a closed process, but every live session checks the durable inbox at its
+// normal boundaries. Delivery acknowledgement means the message reached agent
+// context; accepting a proposal remains a separate, explicit protocol action.
+func mailboxContext(dsn, cwd string, in hookInput) string {
+	h, err := negotiationClient(dsn)
+	if err != nil {
+		return ""
+	}
+	instance := strings.TrimSpace(in.SessionID)
+	if instance == "" {
+		instance = defaultInstance()
+	}
+	registration := messaging.RegisterInput{
+		AgentID:      agentID(),
+		Name:         agentID(),
+		Runtime:      runtimeName(),
+		InstanceID:   instance,
+		Repository:   gitinfo.Repo(cwd),
+		Capabilities: []string{"messaging", "negotiation", "checkpoints"},
+		TTL:          "5m",
+	}
+	var registered messaging.Registration
+	if err := h.JSON("POST", "/v1/agents/register", registration, &registered); err != nil {
+		return ""
+	}
+	var messages []messaging.Message
+	path := "/v1/messages?agent_id=" + url.QueryEscape(registration.AgentID)
+	if err := h.JSON("GET", path, nil, &messages); err != nil || len(messages) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Deconflict delivered messages from other autonomous agents:\n")
+	for i, message := range messages {
+		if i == 12 {
+			fmt.Fprintf(&b, "\n  ...and %d more (`deconflict message inbox`).", len(messages)-i)
+			break
+		}
+		fmt.Fprintf(&b, "\n  [%s] %s from %s", message.Kind, message.DeliveryID, message.SenderAgentID)
+		if message.NegotiationID != "" {
+			fmt.Fprintf(&b, " (negotiation %s)", message.NegotiationID)
+		}
+		if body, ok := message.Payload["body"].(string); ok && body != "" {
+			fmt.Fprintf(&b, ": %s", body)
+		} else if objective, ok := message.Payload["objective"].(string); ok && objective != "" {
+			fmt.Fprintf(&b, ": %s", objective)
+		}
+		var acknowledged messaging.Message
+		_ = h.JSON("POST", "/v1/messages/"+url.PathEscape(message.DeliveryID)+"/ack", map[string]string{"agent_id": registration.AgentID}, &acknowledged)
+	}
+	b.WriteString("\n\nTreat delivery as a signal, not consent. Inspect the negotiation before proposing, accepting, or changing shared resources.")
+	return b.String()
 }
 
 // sessionContext is what an agent sees before it starts: who else is inside

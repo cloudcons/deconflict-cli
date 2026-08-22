@@ -6,7 +6,7 @@ package cli
 
 const skillMarkdown = `---
 name: deconflict
-description: Claim an area of a repository before editing it, and check what other agents already claimed. Use when starting work in a repo where several people or agents commit in parallel, before editing files, when a claim reports an overlap, and when the work lands.
+description: Coordinate work with other autonomous agents through claims, durable messages, and negotiated agreements. Use when starting work, receiving another agent's message, before editing shared resources, when a claim overlaps, and when work lands.
 ---
 
 # Working alongside other agents
@@ -17,6 +17,27 @@ merge conflict or a fix that quietly disappeared.
 
 Claims are **advisory**. Nothing here blocks an edit or locks a file. The point
 is that the other agent finds out while it can still choose differently.
+
+## Messages and negotiated agreements
+
+Register the current runtime at session start, then inspect pending messages:
+
+` + "```console" + `
+$ deconflict message register --runtime claude-code --instance "$SESSION_ID"
+$ deconflict message inbox
+` + "```" + `
+
+When another autonomous agent is affected, signal it directly instead of
+assuming it will discover a database row:
+
+` + "```console" + `
+$ deconflict message send --to '<agent-id>' --kind access.requested \
+    --negotiation '<negotiation-id>' --body '<what needs a response>'
+` + "```" + `
+
+Receiving a message is not agreement. Inspect the referenced negotiation, then
+propose, counterpropose, accept, checkpoint, or recover explicitly. Acknowledge
+the delivery after processing it; acknowledgement is not proposal acceptance.
 
 ## Before you edit anything
 

@@ -169,6 +169,45 @@ func TestInstallCommandReportsWhatItDid(t *testing.T) {
 	}
 }
 
+func TestInstallPreservesOtherMCPServers(t *testing.T) {
+	dir := t.TempDir()
+	claude := filepath.Join(dir, ".mcp.json")
+	mustWrite(t, claude, `{"mcpServers":{"existing":{"command":"existing-server"}}}`)
+	if _, err := installClaudeMCP(claude, "/opt/deconflict", false); err != nil {
+		t.Fatal(err)
+	}
+	servers := readBack(t, claude)["mcpServers"].(map[string]any)
+	if len(servers) != 2 || servers["existing"].(map[string]any)["command"] != "existing-server" {
+		t.Fatalf("Claude MCP servers = %#v", servers)
+	}
+
+	codex := filepath.Join(dir, "config.toml")
+	mustWrite(t, codex, "[mcp_servers.existing]\ncommand = \"existing-server\"\n")
+	if _, err := installCodexMCP(codex, "/opt/deconflict", false); err != nil {
+		t.Fatal(err)
+	}
+	body := read(t, codex)
+	for _, want := range []string{"[mcp_servers.existing]", `command = "existing-server"`, "[mcp_servers.deconflict]", `command = "/opt/deconflict"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("Codex config lost %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestCodexMCPInstallUpdatesMovedBinaryWithoutDuplicatingSection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if _, err := installCodexMCP(path, "/old/deconflict", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := installCodexMCP(path, "/new/deconflict", false); err != nil {
+		t.Fatal(err)
+	}
+	body := read(t, path)
+	if strings.Count(body, "[mcp_servers.deconflict]") != 1 || strings.Contains(body, "/old/") || !strings.Contains(body, "/new/deconflict") {
+		t.Fatalf("MCP section was not updated in place:\n%s", body)
+	}
+}
+
 // ---------- helpers ----------
 
 func mustWrite(t *testing.T, path, body string) {
