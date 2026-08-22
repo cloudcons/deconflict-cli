@@ -28,6 +28,14 @@ Claiming
   deconflict status                          my claim, with git-derived progress
   deconflict reconcile [--apply]             close claims whose branch is merged
 
+Agent coordination
+  deconflict negotiate request --paths <glob,...> --objective <text>
+  deconflict negotiate <list|show|propose|accept|checkpoint|recover|complete|plans>
+                                             negotiate access and commitments
+  deconflict message <register|send|inbox|watch|ack|presence>
+                                             interoperable agent mailbox
+  deconflict mcp                              MCP server for Claude Code and Codex
+
 Account (registries with accounts enabled)
   deconflict login   [--server URL]          sign in through a browser, once
   deconflict logout  [--all]
@@ -73,6 +81,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdStatus(rest, stdout)
 	case "reconcile":
 		err = cmdReconcile(rest, stdout)
+	case "negotiate", "coordination":
+		err = cmdNegotiate(rest, stdout)
+	case "message", "messages", "agent":
+		err = cmdMessage(rest, stdout)
+	case "mcp":
+		err = cmdMCP(rest, os.Stdin, stdout)
 	case "settings":
 		err = cmdSettings(rest, stdout)
 	case "serve":

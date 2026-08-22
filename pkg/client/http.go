@@ -70,6 +70,20 @@ func (h *HTTPStore) do(method, path string, body any) ([]byte, error) {
 	return b, nil
 }
 
+// JSON exposes the authenticated registry transport to higher-level protocol
+// clients such as negotiation. Claims remain Store's small common interface;
+// coordination exists only on a shared HTTP registry with identity and tenancy.
+func (h *HTTPStore) JSON(method, path string, body, out any) error {
+	b, err := h.do(method, path, body)
+	if err != nil {
+		return err
+	}
+	if out == nil || len(b) == 0 {
+		return nil
+	}
+	return json.Unmarshal(b, out)
+}
+
 // Settings fetches operator settings, degrading to defaults if the registry is
 // unreachable — the same rule as everywhere else: never block on it.
 func (h *HTTPStore) Settings() settings.Settings {
