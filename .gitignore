@@ -4,3 +4,18 @@
 /node_modules/
 /playwright-report/
 /test-results/
+
+# OpenTofu downloads providers locally and writes state/plan files. Stripe's
+# webhook signing secret is returned at creation and therefore lives in state;
+# these files must never enter Git even though the state is encrypted.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
