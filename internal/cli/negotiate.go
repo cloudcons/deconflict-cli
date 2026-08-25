@@ -25,6 +25,8 @@ const negotiateUsage = `deconflict negotiate — coordination protocol for auton
   checkpoint  publish checkpoint evidence
   recover     enter the negotiated recovery procedure
   deviate     report that the agreement no longer matches the work, and reopen it
+  ask         ask the human accountable for you something that is not yours to decide
+  answer      answer a question addressed to you
   lease       renew the agreement lease
   complete    complete an agreement after commitments are satisfied
   plans       show execution plans derived from current agreements
@@ -52,6 +54,10 @@ func cmdNegotiate(args []string, out io.Writer) error {
 		return negotiateRecover(args[1:], out)
 	case "deviate":
 		return negotiateDeviate(args[1:], out)
+	case "ask":
+		return negotiateAsk(args[1:], out)
+	case "answer":
+		return negotiateAnswer(args[1:], out)
 	case "lease":
 		return negotiateLease(args[1:], out)
 	case "complete":
@@ -260,6 +266,53 @@ func negotiateDeviate(args []string, out io.Writer) error {
 	}
 	return protocolMutation(*dsn, id, "deviation", negotiation.DeviationInput{AgentID: *agent, CommitmentID: *commitment, Reason: *reason}, out)
 }
+
+// negotiateAsk is for the questions that were never the agents' to settle.
+//
+// Not for coordination: which of you goes first is yours, and a human called in
+// to referee it knows less about the code than either of you by then. This is
+// for authority — may I break this interface, may I commit — where an answer
+// invented by an agent is worth nothing.
+//
+// Nothing waits. --assume says what you will do if nobody replies, and silence
+// means exactly that.
+func negotiateAsk(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate ask", flag.ContinueOnError)
+	agent := fs.String("agent", agentID(), "delegated agent id")
+	scope := fs.String("scope", "mandate", "mandate (your own delegator) or agreement (every participant's)")
+	subject := fs.String("subject", "", "the question, in one line")
+	body := fs.String("body", "", "what you have established, and what turns on the answer")
+	assume := fs.String("assume", "", "what you will do if nobody answers")
+	commitment := fs.String("commitment", "", "the commitment this bears on")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" || strings.TrimSpace(*subject) == "" || strings.TrimSpace(*assume) == "" {
+		return fmt.Errorf("negotiation id, --subject and --assume are required")
+	}
+	return protocolMutation(*dsn, id, "questions", negotiation.QuestionInput{
+		AgentID: *agent, Scope: *scope, Subject: *subject, Body: *body,
+		Assume: *assume, CommitmentID: *commitment,
+	}, out)
+}
+
+func negotiateAnswer(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate answer", flag.ContinueOnError)
+	question := fs.String("question", "", "question id")
+	answer := fs.String("answer", "", "the answer")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" || *question == "" || strings.TrimSpace(*answer) == "" {
+		return fmt.Errorf("negotiation id, --question and --answer are required")
+	}
+	return protocolMutation(*dsn, id, "answers", negotiation.AnswerInput{QuestionID: *question, Answer: *answer}, out)
+}
+
 func negotiateLease(args []string, out io.Writer) error {
 	id, rest := takeID(args)
 	fs := flag.NewFlagSet("negotiate lease", flag.ContinueOnError)
