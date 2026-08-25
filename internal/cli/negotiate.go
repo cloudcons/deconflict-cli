@@ -350,6 +350,8 @@ func negotiateDefer(args []string, out io.Writer) error {
 	agent := fs.String("agent", agentID(), "delegated agent id")
 	question := fs.String("question", "", "question id")
 	reason := fs.String("reason", "", "what about this is not the agents' to settle")
+	needs := fs.String("needs", "decision", "what the person must supply: decision or clarification")
+	note := fs.String("note", "", "when deferring somebody else's question: what you looked at and why you cannot settle it")
 	dsn := fs.String("store", "", "registry URL")
 	if err := fs.Parse(rest); err != nil {
 		return err
@@ -358,7 +360,7 @@ func negotiateDefer(args []string, out io.Writer) error {
 		return fmt.Errorf("negotiation id, --question and --reason are required")
 	}
 	return protocolMutation(*dsn, id, "deferrals", negotiation.DeferInput{
-		QuestionID: *question, AgentID: *agent, Reason: *reason,
+		QuestionID: *question, AgentID: *agent, Reason: *reason, Needs: *needs, Note: *note,
 	}, out)
 }
 

@@ -78,14 +78,29 @@ $ deconflict negotiate resolve '<negotiation-id>' \
     --question '<question-id>' --answer '<what you know that settles it>'
 ` + "```" + `
 
-A human is reached only when an agent decides one has to be. Nothing escalates
-on a timer, so a question nobody defers is a question no person will ever see:
+If you look at another agent's question and cannot settle it, say so. That is
+not a failure, it is the record of what the agents tried:
 
 ` + "```console" + `
 $ deconflict negotiate defer '<negotiation-id>' \
     --question '<question-id>' \
-    --reason   '<what about this is not the agents to settle>'
+    --reason   '<what about this is not the agents to settle>' \
+    --note     '<what you looked at, and why it does not settle it>'
 ` + "```" + `
+
+A person is reached only after that has happened. **You cannot defer your own
+question while the agents it was put to have not answered** — the registry will
+refuse it and name them. Ask them, wait, and if they cannot settle it either,
+one of them defers it and a person sees it with the whole attempt attached.
+
+Nothing escalates on a timer. If nobody engages at all, nobody is woken and
+your ` + "`--assume`" + ` is what happens — in the open, on the record. That is the
+trade for never paging somebody merely because the agents were slow.
+
+Say what you need from the person with ` + "`--needs`" + `: ` + "`decision`" + ` when the
+choice is theirs to make, ` + "`clarification`" + ` when your mandate is unclear and
+you need it explained. Both are input; the difference is what they have to
+supply.
 
 Defer sparingly and specifically. Policy, money, promises to customers, and
 anything whose cost lands outside the repository are worth a person. Which of
