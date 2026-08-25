@@ -93,8 +93,11 @@ func cmdHook(args []string, out io.Writer) error {
 
 // mailboxContext bridges independently launched agent sessions. Hooks cannot
 // wake a closed process, but every live session checks the durable inbox at its
-// normal boundaries. Delivery acknowledgement means the message reached agent
-// context; accepting a proposal remains a separate, explicit protocol action.
+// normal boundaries.
+//
+// It reads and never acknowledges. Rendering a message into this string is not
+// evidence that any agent read it, so the mailbox stays at-least-once and the
+// agent acknowledges what it has actually processed.
 func mailboxContext(dsn, cwd string, in hookInput) string {
 	h, err := negotiationClient(dsn)
 	if err != nil {
@@ -138,10 +141,25 @@ func mailboxContext(dsn, cwd string, in hookInput) string {
 		} else if objective, ok := message.Payload["objective"].(string); ok && objective != "" {
 			fmt.Fprintf(&b, ": %s", objective)
 		}
-		var acknowledged messaging.Message
-		_ = h.JSON("POST", "/v1/messages/"+url.PathEscape(message.DeliveryID)+"/ack", map[string]string{"agent_id": registration.AgentID}, &acknowledged)
 	}
+	// Deliberately not acknowledged here.
+	//
+	// This hook used to ack each message while rendering it, which made the
+	// mailbox at-most-once: everything between the ack and the model actually
+	// reading this string — a truncated hook output, a killed process, a
+	// compacted context — consumed the message permanently. An agent lost two
+	// deliveries that way and recovered them only from persisted hook output,
+	// which is luck rather than a mechanism, on the one channel the whole
+	// protocol depends on.
+	//
+	// Inbox already stamps delivered_at, so "the registry handed this over" is
+	// recorded without anyone claiming to have read it. Acknowledgement is a
+	// statement about having processed a message, and only the agent that
+	// processed it can honestly make that statement. Unacknowledged mail is
+	// redelivered at the next session start, which is the failure everyone
+	// would rather have.
 	b.WriteString("\n\nTreat delivery as a signal, not consent. Inspect the negotiation before proposing, accepting, or changing shared resources.")
+	b.WriteString("\nThese stay in your mailbox until you acknowledge them, and will be delivered again next session: `deconflict message ack <delivery-id>` once you have acted on one.")
 	return b.String()
 }
 
