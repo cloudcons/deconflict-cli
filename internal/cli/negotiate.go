@@ -86,6 +86,7 @@ func negotiateRequest(args []string, out io.Writer) error {
 	objective := fs.String("objective", "", "objective summary")
 	success := fs.String("success", "", "comma-separated success criteria")
 	access := fs.String("access", "modify", "inspect, modify, or exclusive_modify")
+	scope := fs.String("scope", "", "what the access is for, e.g. 'tests only'")
 	lease := fs.String("lease", "45m", "requested coordination lease")
 	runtime := fs.String("runtime", "", "agent runtime")
 	model := fs.String("model", "", "agent model")
@@ -103,7 +104,7 @@ func negotiateRequest(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	in := negotiation.AccessRequest{Repository: gitinfo.Repo(cwd), Agent: negotiation.AgentIdentity{ID: agentID(), Name: agentID(), Runtime: *runtime, Model: *model, Instance: *instance}, Objective: negotiation.Objective{ID: negotiation.NewID("obj_"), Summary: strings.TrimSpace(*objective), SuccessCriteria: splitList(*success), Priority: *priority}, Resources: []negotiation.ResourceRequest{{Paths: splitList(*paths), Access: *access}}, Lease: negotiation.Lease{Duration: *lease}}
+	in := negotiation.AccessRequest{Repository: gitinfo.Repo(cwd), Agent: negotiation.AgentIdentity{ID: agentID(), Name: agentID(), Runtime: *runtime, Model: *model, Instance: *instance}, Objective: negotiation.Objective{ID: negotiation.NewID("obj_"), Summary: strings.TrimSpace(*objective), SuccessCriteria: splitList(*success), Priority: *priority}, Resources: []negotiation.ResourceRequest{{Paths: splitList(*paths), Access: *access, Scope: strings.TrimSpace(*scope)}}, Lease: negotiation.Lease{Duration: *lease}}
 	var v negotiation.Session
 	if err = h.JSON(http.MethodPost, "/v1/negotiations", in, &v); err != nil {
 		return err
