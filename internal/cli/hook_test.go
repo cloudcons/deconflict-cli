@@ -2,6 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -136,5 +139,58 @@ func TestUnclaimedFileIsSilent(t *testing.T) {
 
 	if got := h.preTool("s", "src/billing/invoice.go"); got != "" {
 		t.Errorf("unclaimed file produced output: %q", got)
+	}
+}
+
+// Rendering a message into a hook's output is not evidence anybody read it.
+//
+// This hook used to acknowledge each message while building that string, which
+// made the mailbox at-most-once: a truncated hook output, a killed process or a
+// compacted context consumed the delivery permanently, on the one channel the
+// coordination protocol depends on. An agent lost two messages that way during
+// a live run and recovered them only because the hook output happened to have
+// been persisted somewhere.
+func TestMailboxDeliveryNeverAcknowledges(t *testing.T) {
+	var acked []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/register":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "reg_1", "agent_id": "bo/claude"})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/messages":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode([]map[string]any{{
+				"delivery_id":     "dlv_1",
+				"sender_agent_id": "ana/claude",
+				"kind":            "access.requested",
+				"negotiation_id":  "neg_1",
+				"payload":         map[string]any{"body": "the 401 sites you are editing are the ones I am rewriting"},
+			}})
+		case strings.HasSuffix(r.URL.Path, "/ack"):
+			acked = append(acked, r.URL.Path)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("DECONFLICT_TOKEN", "test-agent-token")
+	t.Setenv("DECONFLICT_AGENT", "bo/claude")
+
+	got := mailboxContext(server.URL, t.TempDir(), hookInput{SessionID: "s1"})
+
+	if len(acked) != 0 {
+		t.Errorf("hook acknowledged %v; delivery is the registry's fact, acknowledgement is the agent's", acked)
+	}
+	if !strings.Contains(got, "the 401 sites you are editing are the ones I am rewriting") {
+		t.Errorf("message body never reached the agent: %q", got)
+	}
+	if !strings.Contains(got, "dlv_1") {
+		t.Errorf("delivery id withheld, so the agent cannot acknowledge it: %q", got)
+	}
+	if !strings.Contains(got, "message ack") {
+		t.Errorf("agent is not told how to acknowledge, so nothing ever leaves the mailbox: %q", got)
 	}
 }

@@ -24,6 +24,7 @@ Claiming
   deconflict check   [--paths <glob,...>] [--file <path>]   what overlaps this area
   deconflict list    [--all] [--repo <id>] [--json]
   deconflict release [id] [--reason merged|abandoned|superseded] [--pr <url>]
+  deconflict amend   [id] --paths <globs> [--not <globs>] [--what …] [--why …]
   deconflict renew   [id] [--ttl 8h]
   deconflict status                          my claim, with git-derived progress
   deconflict reconcile [--apply]             close claims whose branch is merged
@@ -77,6 +78,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdRelease(rest, stdout)
 	case "renew":
 		err = cmdRenew(rest, stdout)
+	case "amend":
+		err = cmdAmend(rest, stdout)
 	case "status":
 		err = cmdStatus(rest, stdout)
 	case "reconcile":
@@ -505,6 +508,87 @@ func cmdRenew(args []string, out io.Writer) error {
 	return nil
 }
 
+// cmdAmend corrects a claim in place.
+//
+// A claim is a prediction made before the work, and the work is what tells you
+// the prediction was wrong: a command needs a flag, the flag needs help text,
+// the help text lives in a file you never thought about. Until now the only way
+// to say so was to release the claim and announce a new one, which cost the work
+// its identity — one agent went through three ids in seven minutes correcting
+// itself, and an audit trail of three claims reads as three pieces of work.
+//
+// The log stays append-only. An amendment is an event like any other; folding it
+// replaces the declared area and leaves everything else — the id, the lease, the
+// history — alone. Paths are replaced rather than merged, because a correction
+// is sometimes narrower than the guess that preceded it.
+func cmdAmend(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("amend", flag.ContinueOnError)
+	paths := fs.String("paths", "", "the area this claim actually covers, comma separated")
+	not := fs.String("not", "", "paths inside that area you are still not touching")
+	what := fs.String("what", "", "restate what the work is")
+	why := fs.String("why", "", "restate why")
+	iface := fs.String("interface", "", "restate the interface changes")
+	dsn := fs.String("store", "", "store DSN")
+	id, args := takeID(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cwd, _ := os.Getwd()
+	if id == "" {
+		id = readCurrent(cwd)
+	}
+	if id == "" {
+		return fmt.Errorf("no claim id given and none recorded for this worktree")
+	}
+	if *paths == "" && *not == "" && *what == "" && *why == "" && *iface == "" {
+		return fmt.Errorf("nothing to amend: pass at least one of --paths, --not, --what, --why or --interface")
+	}
+	st, err := openStore(*dsn)
+	if err != nil {
+		return err
+	}
+	c, err := loadOne(st, id)
+	if err != nil {
+		return err
+	}
+	if c.Released != nil {
+		return fmt.Errorf("claim %s is already released; announce a new one", id)
+	}
+	before := len(c.Paths)
+	if *paths != "" {
+		c.Paths = claim.NormalizeAll(splitList(*paths))
+	}
+	if *not != "" {
+		c.NotPaths = claim.NormalizeAll(splitList(*not))
+	}
+	if *what != "" {
+		c.What = strings.TrimSpace(*what)
+	}
+	if *why != "" {
+		c.Why = strings.TrimSpace(*why)
+	}
+	if *iface != "" {
+		c.Interface = strings.TrimSpace(*iface)
+	}
+	if err := st.Append(claim.Event{Op: "amend", TS: time.Now().UTC(), Claim: c}); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "amended %s  %s\n", id, strings.Join(c.Paths, ", "))
+	if *paths != "" && len(c.Paths) != before {
+		fmt.Fprintf(out, "  declared area went from %d to %d path(s); the claim, its lease and its history are unchanged\n", before, len(c.Paths))
+	}
+	// An amendment can create an overlap that did not exist when the claim was
+	// first made, and that is exactly the thing worth saying out loud.
+	if evs, err := st.Events(); err == nil {
+		conflicts := claim.FindOverlaps(claim.Fold(evs), c.Repo, c.Paths, time.Now().UTC(),
+			map[string]bool{c.ID: true}, st.Settings().IgnorePaths)
+		if len(conflicts) > 0 {
+			fmt.Fprintf(out, "\n%s", claim.Render(conflicts, time.Now().UTC()))
+		}
+	}
+	return nil
+}
+
 // cmdStatus reports my claim with progress derived from git rather than from
 // anything the agent said about itself.
 func cmdStatus(args []string, out io.Writer) error {
@@ -529,7 +613,24 @@ func cmdStatus(args []string, out io.Writer) error {
 	}
 	now := time.Now().UTC()
 	base := gitinfo.BaseRef(cwd)
-	changed := gitinfo.ChangedPaths(cwd, base)
+	// Measured from the branch tip this claim was made at, not from the
+	// published base.
+	//
+	// "origin/main...HEAD" resolves its merge base to origin/main whenever the
+	// branch descends from it, so on a branch stacked on unmerged work the
+	// diff is the whole stack: on one real repository that reported 28 files
+	// outside a claim, of which the agent had touched one. The signal the
+	// report exists to give was buried in work somebody else had already done.
+	//
+	// The claim recorded where the branch stood when it was announced, which
+	// is exactly the question being asked — what have I touched since I said
+	// what I would touch. Falls back to the base for claims made before this
+	// was recorded, and for a worktree where that commit no longer resolves.
+	since := base
+	if c.HeadSHA != "" && gitinfo.Resolves(cwd, c.HeadSHA) {
+		since = c.HeadSHA
+	}
+	changed := gitinfo.ChangedPaths(cwd, since)
 	fmt.Fprintf(out, "claim %s  %s ago  lease %s left\n", c.ID, c.Age(now), c.TTL(now))
 	fmt.Fprintf(out, "  what:    %s\n", c.What)
 	fmt.Fprintf(out, "  claimed: %s\n", strings.Join(c.Paths, ", "))
@@ -556,7 +657,8 @@ func cmdStatus(args []string, out io.Writer) error {
 		for _, f := range outside {
 			fmt.Fprintf(out, "    %s\n", f)
 		}
-		fmt.Fprintln(out, "  Re-claim with the wider path set so others can see it.")
+		fmt.Fprintln(out, "  Amend the claim so the announcement keeps matching reality:")
+		fmt.Fprintf(out, "    deconflict amend --paths '%s'\n", strings.Join(append(append([]string{}, c.Paths...), outside...), ","))
 	}
 	return nil
 }

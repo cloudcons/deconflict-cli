@@ -108,5 +108,27 @@ func relToRepo(root, p string) string {
 	if r, err := filepath.Rel(root, p); err == nil && !strings.HasPrefix(r, "..") {
 		return r
 	}
+	// Both sides resolved before giving up, because one of them having gone
+	// through a symlink is not a different file.
+	//
+	// git reports the worktree root as its real path, and an editor hands over
+	// the path the user typed. On macOS /tmp is a link to /private/tmp, so a
+	// repository under it produced a root and a target that share no prefix,
+	// Rel returned a "../.." path, and the absolute path fell through to be
+	// matched against globs like "src/**" — which it never matches. The effect
+	// was not a wrong warning but no warning at all: every claim silently
+	// stopped covering every file, for anybody whose checkout sits under a
+	// linked path.
+	// The directory is resolved rather than the file, because the file is
+	// routinely one that does not exist yet — this runs before a write, and a
+	// write is often a creation. EvalSymlinks fails on a path that is not
+	// there, which would have left new files unmatched by any claim.
+	realRoot, rootErr := filepath.EvalSymlinks(root)
+	realDir, dirErr := filepath.EvalSymlinks(filepath.Dir(p))
+	if rootErr == nil && dirErr == nil {
+		if r, err := filepath.Rel(realRoot, filepath.Join(realDir, filepath.Base(p))); err == nil && !strings.HasPrefix(r, "..") {
+			return r
+		}
+	}
 	return p
 }

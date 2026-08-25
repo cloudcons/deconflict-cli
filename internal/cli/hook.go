@@ -93,8 +93,11 @@ func cmdHook(args []string, out io.Writer) error {
 
 // mailboxContext bridges independently launched agent sessions. Hooks cannot
 // wake a closed process, but every live session checks the durable inbox at its
-// normal boundaries. Delivery acknowledgement means the message reached agent
-// context; accepting a proposal remains a separate, explicit protocol action.
+// normal boundaries.
+//
+// It reads and never acknowledges. Rendering a message into this string is not
+// evidence that any agent read it, so the mailbox stays at-least-once and the
+// agent acknowledges what it has actually processed.
 func mailboxContext(dsn, cwd string, in hookInput) string {
 	h, err := negotiationClient(dsn)
 	if err != nil {
@@ -138,10 +141,25 @@ func mailboxContext(dsn, cwd string, in hookInput) string {
 		} else if objective, ok := message.Payload["objective"].(string); ok && objective != "" {
 			fmt.Fprintf(&b, ": %s", objective)
 		}
-		var acknowledged messaging.Message
-		_ = h.JSON("POST", "/v1/messages/"+url.PathEscape(message.DeliveryID)+"/ack", map[string]string{"agent_id": registration.AgentID}, &acknowledged)
 	}
+	// Deliberately not acknowledged here.
+	//
+	// This hook used to ack each message while rendering it, which made the
+	// mailbox at-most-once: everything between the ack and the model actually
+	// reading this string — a truncated hook output, a killed process, a
+	// compacted context — consumed the message permanently. An agent lost two
+	// deliveries that way and recovered them only from persisted hook output,
+	// which is luck rather than a mechanism, on the one channel the whole
+	// protocol depends on.
+	//
+	// Inbox already stamps delivered_at, so "the registry handed this over" is
+	// recorded without anyone claiming to have read it. Acknowledgement is a
+	// statement about having processed a message, and only the agent that
+	// processed it can honestly make that statement. Unacknowledged mail is
+	// redelivered at the next session start, which is the failure everyone
+	// would rather have.
 	b.WriteString("\n\nTreat delivery as a signal, not consent. Inspect the negotiation before proposing, accepting, or changing shared resources.")
+	b.WriteString("\nThese stay in your mailbox until you acknowledge them, and will be delivered again next session: `deconflict message ack <delivery-id>` once you have acted on one, or `deconflict message ack <id> <id> ...` for a batch you have worked through.")
 	return b.String()
 }
 
@@ -195,6 +213,57 @@ func sessionContext(dsn, cwd string) string {
 	return b.String()
 }
 
+// ownDrift is the other half of the sentence this hook has always spoken.
+//
+// FindOverlaps is handed the caller's own claim as an exclusion, so the warning
+// it produces is always about somebody else's ground and never about leaving
+// your own. That left one signal for having drifted from what you declared —
+// `deconflict status`, run by hand, if it occurs to you — and an agent that
+// widens its area silently is exactly the case the announcement exists to
+// prevent. Two agents corrected their own claims during a live run by noticing;
+// nothing told them.
+//
+// Said at the moment of the write, because that is when it is cheap to fix and
+// when the agent still knows why it is touching the file.
+func ownDrift(claims []claim.Claim, id string, rels []string, now time.Time) string {
+	if id == "" {
+		return ""
+	}
+	var mine *claim.Claim
+	for i := range claims {
+		if claims[i].ID == id && claims[i].Active(now) {
+			mine = &claims[i]
+			break
+		}
+	}
+	if mine == nil {
+		return ""
+	}
+	var outside []string
+	for _, rel := range rels {
+		covered := false
+		for _, p := range mine.Paths {
+			if claim.Match(p, rel) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			outside = append(outside, rel)
+		}
+	}
+	if len(outside) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"This edit is outside what you announced in claim %s (%s).\n"+
+			"  outside: %s\n"+
+			"Nothing is blocked. If the work really does reach here, amend the claim so it keeps\n"+
+			"describing what you are doing: `deconflict amend --paths '%s'`",
+		mine.ID, strings.Join(mine.Paths, ", "), strings.Join(outside, ", "),
+		strings.Join(append(append([]string{}, mine.Paths...), outside...), ","))
+}
+
 func preToolContext(dsn, cwd string, in hookInput) string {
 	targets := editedPaths(in.ToolName, in.ToolInput)
 	if len(targets) == 0 {
@@ -218,9 +287,11 @@ func preToolContext(dsn, cwd string, in hookInput) string {
 	if id := readCurrent(cwd); id != "" {
 		mine[id] = true
 	}
-	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), rels, now, mine, st.Settings().IgnorePaths)
+	folded := claim.Fold(evs)
+	conflicts := claim.FindOverlaps(folded, gitinfo.Repo(cwd), rels, now, mine, st.Settings().IgnorePaths)
+	drift := ownDrift(folded, readCurrent(cwd), rels, now)
 	if len(conflicts) == 0 {
-		return ""
+		return drift
 	}
 	// Say each thing once per session, and say it at the length it is worth.
 	//
@@ -269,6 +340,14 @@ func preToolContext(dsn, cwd string, in hookInput) string {
 			b.WriteString("\n")
 		}
 		b.WriteString(claim.RenderBrief(repeat, now))
+	}
+	// Somebody else's ground and your own are different facts about the same
+	// edit, and an agent that is told only the first will widen quietly.
+	if drift != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(drift)
 	}
 	return b.String()
 }

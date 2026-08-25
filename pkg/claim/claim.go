@@ -143,6 +143,29 @@ func Fold(events []Event) []Claim {
 				}
 				byID[e.Claim.ID] = cur
 			}
+		case "amend":
+			// Widening what you declared is an amendment, not a funeral and a
+			// birth. Releasing and re-claiming was the only way to correct a
+			// claim, which cost the work its identity: three ids for one piece
+			// of work, and an audit trail harder to read than the work was.
+			// Paths are replaced wholesale rather than merged, because the
+			// honest correction is sometimes narrower than the guess.
+			if seen {
+				if len(e.Claim.Paths) > 0 {
+					cur.Paths = e.Claim.Paths
+				}
+				cur.NotPaths = e.Claim.NotPaths
+				if e.Claim.What != "" {
+					cur.What = e.Claim.What
+				}
+				if e.Claim.Why != "" {
+					cur.Why = e.Claim.Why
+				}
+				if e.Claim.Interface != "" {
+					cur.Interface = e.Claim.Interface
+				}
+				byID[e.Claim.ID] = cur
+			}
 		case "annotate":
 			if seen {
 				if e.Claim.PR != "" {
@@ -157,7 +180,18 @@ func Fold(events []Event) []Claim {
 	}
 	out := make([]Claim, 0, len(order))
 	for _, id := range order {
-		out = append(out, byID[id])
+		// An event for a claim that was never announced leaves nothing behind.
+		// Ordering records an id the first time it is seen at all, including on
+		// a renew, release or amendment that found nothing to act on — and a
+		// missing map entry then yielded a zero Claim, so a log holding a
+		// release whose claim it had never seen listed a nameless claim with no
+		// paths and no dates. Partial logs and out-of-order replication both
+		// produce exactly that.
+		c, ok := byID[id]
+		if !ok {
+			continue
+		}
+		out = append(out, c)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Created.After(out[j].Created) })
 	return out

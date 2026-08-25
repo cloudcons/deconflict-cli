@@ -12,10 +12,19 @@ import (
 )
 
 func run(dir string, args ...string) (string, error) {
+	out, err := runRaw(dir, args...)
+	return strings.TrimSpace(out), err
+}
+
+// runRaw is run without the trim, for the one caller whose output is
+// column-aligned. Trimming is right for every other git command here — they
+// return a single value with a trailing newline — and wrong for porcelain
+// status, where a leading space is data.
+func runRaw(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
-	return strings.TrimSpace(string(out)), err
+	return string(out), err
 }
 
 // Root returns the repository root for dir, or "" if it is not a work tree.
@@ -97,14 +106,28 @@ func ChangedPaths(dir, base string) []string {
 			add(v)
 		}
 	}
-	if v, err := run(dir, "status", "--porcelain=v1", "--no-renames"); err == nil {
+	// Porcelain v1 is "XY <path>": two status columns, a space, then the path.
+	// Read raw, because trimming the whole output eats the leading space of a
+	// first line that is unstaged-only (" M path") and shifts this slice one
+	// byte into the filename — which reported a real path as a file changed
+	// outside the claim that covered it, for the first changed file and no
+	// other.
+	if v, err := runRaw(dir, "status", "--porcelain=v1", "--no-renames"); err == nil {
 		for _, l := range strings.Split(v, "\n") {
 			if len(l) > 3 {
-				add(strings.TrimSpace(l[3:]))
+				add(l[3:])
 			}
 		}
 	}
 	return out
+}
+
+// Resolves reports whether a revision still exists in this worktree. A claim
+// records the commit it was made at, and that commit can be gone by the time
+// anybody asks — rebased away, or made in a checkout this one has never seen.
+func Resolves(dir, rev string) bool {
+	out, err := run(dir, "rev-parse", "--verify", "--quiet", rev+"^{commit}")
+	return err == nil && out != ""
 }
 
 // BaseRef resolves the published base branch — the thing a claim is measured

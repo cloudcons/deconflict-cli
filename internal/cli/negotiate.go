@@ -24,7 +24,8 @@ const negotiateUsage = `deconflict negotiate — coordination protocol for auton
   accept      accept the current proposal under an agent delegation
   checkpoint  publish checkpoint evidence
   recover     enter the negotiated recovery procedure
-	lease       renew the agreement lease
+  deviate     report that the agreement no longer matches the work, and reopen it
+  lease       renew the agreement lease
   complete    complete an agreement after commitments are satisfied
   plans       show execution plans derived from current agreements
 `
@@ -49,6 +50,8 @@ func cmdNegotiate(args []string, out io.Writer) error {
 		return negotiateCheckpoint(args[1:], out)
 	case "recover":
 		return negotiateRecover(args[1:], out)
+	case "deviate":
+		return negotiateDeviate(args[1:], out)
 	case "lease":
 		return negotiateLease(args[1:], out)
 	case "complete":
@@ -86,6 +89,7 @@ func negotiateRequest(args []string, out io.Writer) error {
 	objective := fs.String("objective", "", "objective summary")
 	success := fs.String("success", "", "comma-separated success criteria")
 	access := fs.String("access", "modify", "inspect, modify, or exclusive_modify")
+	scope := fs.String("scope", "", "what the access is for, e.g. 'tests only'")
 	lease := fs.String("lease", "45m", "requested coordination lease")
 	runtime := fs.String("runtime", "", "agent runtime")
 	model := fs.String("model", "", "agent model")
@@ -103,7 +107,7 @@ func negotiateRequest(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	in := negotiation.AccessRequest{Repository: gitinfo.Repo(cwd), Agent: negotiation.AgentIdentity{ID: agentID(), Name: agentID(), Runtime: *runtime, Model: *model, Instance: *instance}, Objective: negotiation.Objective{ID: negotiation.NewID("obj_"), Summary: strings.TrimSpace(*objective), SuccessCriteria: splitList(*success), Priority: *priority}, Resources: []negotiation.ResourceRequest{{Paths: splitList(*paths), Access: *access}}, Lease: negotiation.Lease{Duration: *lease}}
+	in := negotiation.AccessRequest{Repository: gitinfo.Repo(cwd), Agent: negotiation.AgentIdentity{ID: agentID(), Name: agentID(), Runtime: *runtime, Model: *model, Instance: *instance}, Objective: negotiation.Objective{ID: negotiation.NewID("obj_"), Summary: strings.TrimSpace(*objective), SuccessCriteria: splitList(*success), Priority: *priority}, Resources: []negotiation.ResourceRequest{{Paths: splitList(*paths), Access: *access, Scope: strings.TrimSpace(*scope)}}, Lease: negotiation.Lease{Duration: *lease}}
 	var v negotiation.Session
 	if err = h.JSON(http.MethodPost, "/v1/negotiations", in, &v); err != nil {
 		return err
@@ -235,6 +239,26 @@ func negotiateRecover(args []string, out io.Writer) error {
 		return fmt.Errorf("negotiation id and --reason are required")
 	}
 	return protocolMutation(*dsn, id, "recovery", negotiation.RecoveryInput{AgentID: *agent, Reason: *reason}, out)
+}
+
+// negotiateDeviate is the way to amend an agreement that is already running.
+// Proposals are refused during execution so that nobody can rewrite the terms
+// underneath an agent acting on them; saying plainly that the terms are wrong
+// pauses the work and reopens them.
+func negotiateDeviate(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate deviate", flag.ContinueOnError)
+	agent := fs.String("agent", agentID(), "delegated agent id")
+	commitment := fs.String("commitment", "", "commitment the deviation was found in")
+	reason := fs.String("reason", "", "what the agreement says, and what is actually true")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" || strings.TrimSpace(*reason) == "" {
+		return fmt.Errorf("negotiation id and --reason are required")
+	}
+	return protocolMutation(*dsn, id, "deviation", negotiation.DeviationInput{AgentID: *agent, CommitmentID: *commitment, Reason: *reason}, out)
 }
 func negotiateLease(args []string, out io.Writer) error {
 	id, rest := takeID(args)
