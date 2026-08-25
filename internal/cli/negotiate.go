@@ -25,8 +25,11 @@ const negotiateUsage = `deconflict negotiate — coordination protocol for auton
   checkpoint  publish checkpoint evidence
   recover     enter the negotiated recovery procedure
   deviate     report that the agreement no longer matches the work, and reopen it
-  ask         ask the human accountable for you something that is not yours to decide
-  answer      answer a question addressed to you
+  ask         put a question to the other agents that is not yours to decide
+  resolve     settle another agent's question from what you already know
+  defer       hand a question up to the humans, when it is not the agents' to settle
+  explain     answer what a person put back to you before they would rule
+  answer      answer a question that was deferred to you
   lease       renew the agreement lease
   complete    complete an agreement after commitments are satisfied
   plans       show execution plans derived from current agreements
@@ -58,6 +61,12 @@ func cmdNegotiate(args []string, out io.Writer) error {
 		return negotiateAsk(args[1:], out)
 	case "answer":
 		return negotiateAnswer(args[1:], out)
+	case "resolve":
+		return negotiateResolve(args[1:], out)
+	case "defer":
+		return negotiateDefer(args[1:], out)
+	case "explain":
+		return negotiateExplain(args[1:], out)
 	case "lease":
 		return negotiateLease(args[1:], out)
 	case "complete":
@@ -311,6 +320,68 @@ func negotiateAnswer(args []string, out io.Writer) error {
 		return fmt.Errorf("negotiation id, --question and --answer are required")
 	}
 	return protocolMutation(*dsn, id, "answers", negotiation.AnswerInput{QuestionID: *question, Answer: *answer}, out)
+}
+
+// negotiateResolve is one agent settling another's question, which is the rung
+// below a human and where most questions should end.
+func negotiateResolve(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate resolve", flag.ContinueOnError)
+	agent := fs.String("agent", agentID(), "delegated agent id")
+	question := fs.String("question", "", "question id")
+	answer := fs.String("answer", "", "what you know that settles it")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" || *question == "" || strings.TrimSpace(*answer) == "" {
+		return fmt.Errorf("negotiation id, --question and --answer are required")
+	}
+	return protocolMutation(*dsn, id, "answers", negotiation.AnswerInput{
+		QuestionID: *question, Answer: *answer, AgentID: *agent,
+	}, out)
+}
+
+// negotiateDefer hands a question up to the humans, and is the only thing that
+// does. Nothing else escalates — no timer, no unanswered-for-long-enough.
+func negotiateDefer(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate defer", flag.ContinueOnError)
+	agent := fs.String("agent", agentID(), "delegated agent id")
+	question := fs.String("question", "", "question id")
+	reason := fs.String("reason", "", "what about this is not the agents' to settle")
+	needs := fs.String("needs", "decision", "what the person must supply: decision or clarification")
+	note := fs.String("note", "", "when deferring somebody else's question: what you looked at and why you cannot settle it")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" || *question == "" || strings.TrimSpace(*reason) == "" {
+		return fmt.Errorf("negotiation id, --question and --reason are required")
+	}
+	return protocolMutation(*dsn, id, "deferrals", negotiation.DeferInput{
+		QuestionID: *question, AgentID: *agent, Reason: *reason, Needs: *needs, Note: *note,
+	}, out)
+}
+
+// negotiateExplain answers what a person put back to you before they would
+// rule. It does not settle your question — it returns it to them.
+func negotiateExplain(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate explain", flag.ContinueOnError)
+	agent := fs.String("agent", agentID(), "delegated agent id")
+	question := fs.String("question", "", "question id")
+	reply := fs.String("reply", "", "what they asked you for")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" || *question == "" || strings.TrimSpace(*reply) == "" {
+		return fmt.Errorf("negotiation id, --question and --reply are required")
+	}
+	return protocolMutation(*dsn, id, "explanations", negotiation.ExplainInput{
+		QuestionID: *question, AgentID: *agent, Reply: *reply,
+	}, out)
 }
 
 func negotiateLease(args []string, out io.Writer) error {

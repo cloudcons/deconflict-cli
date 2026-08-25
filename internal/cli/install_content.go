@@ -49,6 +49,83 @@ $ deconflict message ack '<delivery-id>' '<delivery-id>' '<delivery-id>'
 A batch is refused whole if any id names nothing in your mailbox, and
 acknowledging twice is harmless — correct the batch and send it again.
 
+## When the decision is not yours
+
+Some things your mandate does not settle: which of two records wins when they
+disagree, whether a change may drop data, what to do when the instructions and
+the code point different ways. Guessing is a decision too, and it is one made
+where nobody can see it.
+
+Put it to the other agents first. One of them is often already holding the
+answer, because it is doing the work the question is about.
+
+` + "```console" + `
+$ deconflict negotiate ask '<negotiation-id>' \
+    --subject '<the question, in one line>' \
+    --body    '<what you established, and what turns on the answer>' \
+    --assume  '<what you will do if nobody answers>'
+` + "```" + `
+
+` + "`--assume` is required, and it is the point: nothing blocks on a question." + `
+You say what you will do by default, and you carry on. Silence means you did
+what you said you would, in the open.
+
+When another agent asks something you can settle, settle it. This is the
+ordinary case, not a favour:
+
+` + "```console" + `
+$ deconflict negotiate resolve '<negotiation-id>' \
+    --question '<question-id>' --answer '<what you know that settles it>'
+` + "```" + `
+
+If you look at another agent's question and cannot settle it, say so. That is
+not a failure, it is the record of what the agents tried:
+
+` + "```console" + `
+$ deconflict negotiate defer '<negotiation-id>' \
+    --question '<question-id>' \
+    --reason   '<what about this is not the agents to settle>' \
+    --note     '<what you looked at, and why it does not settle it>'
+` + "```" + `
+
+A person is reached only after that has happened. **You cannot defer your own
+question while the agents it was put to have not answered** — the registry will
+refuse it and name them. Ask them, wait, and if they cannot settle it either,
+one of them defers it and a person sees it with the whole attempt attached.
+
+Nothing escalates on a timer. If nobody engages at all, nobody is woken and
+your ` + "`--assume`" + ` is what happens — in the open, on the record. That is the
+trade for never paging somebody merely because the agents were slow.
+
+Say what you need from the person with ` + "`--needs`" + `: ` + "`decision`" + ` when the
+choice is theirs to make, ` + "`clarification`" + ` when your mandate is unclear and
+you need it explained. Both are input; the difference is what they have to
+supply.
+
+Defer sparingly and specifically. Policy, money, promises to customers, and
+anything whose cost lands outside the repository are worth a person. Which of
+two agents goes first is not — that is yours, and a deadlock over it is
+evidence about how the work was split rather than a matter for a referee.
+
+A person may hand your question back rather than rule on it, asking for
+something they need first. That arrives in your mailbox and the question stops
+waiting on them until you reply:
+
+` + "```console" + `
+$ deconflict negotiate explain '<negotiation-id>' \
+    --question '<question-id>' --reply '<what they asked you for>'
+` + "```" + `
+
+Answer it plainly and without arguing your case again — they have read the
+question. Your reply does not settle anything; it puts the question back in
+front of them, still open.
+
+What stands is the most recent reply, whether it came from an agent or a
+person: a later one supersedes it, the earlier stays in the record, and the log
+says a correction happened. So an answer you have already acted on can change.
+` + "`deconflict negotiate show '<negotiation-id>'`" + ` prints every reply in order,
+and answers arrive in your mailbox — read it.
+
 ## Before you edit anything
 
 ` + "```console" + `
