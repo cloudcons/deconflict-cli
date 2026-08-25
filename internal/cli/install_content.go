@@ -49,6 +49,33 @@ $ deconflict message ack '<delivery-id>' '<delivery-id>' '<delivery-id>'
 A batch is refused whole if any id names nothing in your mailbox, and
 acknowledging twice is harmless — correct the batch and send it again.
 
+## When the decision is not yours
+
+Some things a mandate does not settle: which of two records wins when they
+disagree, whether a change may drop data, what to do when the instructions and
+the code point different ways. Guessing is a decision too, and it is one made
+where nobody can see it.
+
+` + "```console" + `
+$ deconflict negotiate ask --scope mandate \
+    --subject '<the question, in one line>' \
+    --body    '<what you established, and what turns on the answer>' \
+    --assume  '<what you will do if nobody answers>'
+` + "```" + `
+
+` + "`--assume` is required, and it is the point: nothing blocks on a question." + `
+You say what you will do by default, the people accountable are told, and you
+carry on. If an answer arrives it is recorded against the negotiation with the
+work; if none does, you did what you said you would, in the open.
+
+` + "`--scope mandate` reaches the human accountable for you. `--scope agreement`" + `
+reaches the humans behind every participant, when the answer changes what
+somebody else has already committed to. Either way what stands is the most
+recent answer: a later one supersedes it, the earlier stays in the record, and
+the negotiation log says a correction happened. So an answer you have already
+acted on can change, and it is worth re-reading the question before you rely on
+it — ` + "`deconflict negotiate show '<negotiation-id>'`" + ` prints every reply in order.
+
 ## Before you edit anything
 
 ` + "```console" + `
