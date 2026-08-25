@@ -122,6 +122,14 @@ func ChangedPaths(dir, base string) []string {
 	return out
 }
 
+// Resolves reports whether a revision still exists in this worktree. A claim
+// records the commit it was made at, and that commit can be gone by the time
+// anybody asks — rebased away, or made in a checkout this one has never seen.
+func Resolves(dir, rev string) bool {
+	out, err := run(dir, "rev-parse", "--verify", "--quiet", rev+"^{commit}")
+	return err == nil && out != ""
+}
+
 // BaseRef resolves the published base branch — the thing a claim is measured
 // against. Prefers an explicit override, then upstream/, then origin/.
 func BaseRef(dir string) string {
