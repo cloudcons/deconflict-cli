@@ -28,6 +28,7 @@ const negotiateUsage = `deconflict negotiate — coordination protocol for auton
   ask         put a question to the other agents that is not yours to decide
   resolve     settle another agent's question from what you already know
   defer       hand a question up to the humans, when it is not the agents' to settle
+  explain     answer what a person put back to you before they would rule
   answer      answer a question that was deferred to you
   lease       renew the agreement lease
   complete    complete an agreement after commitments are satisfied
@@ -64,6 +65,8 @@ func cmdNegotiate(args []string, out io.Writer) error {
 		return negotiateResolve(args[1:], out)
 	case "defer":
 		return negotiateDefer(args[1:], out)
+	case "explain":
+		return negotiateExplain(args[1:], out)
 	case "lease":
 		return negotiateLease(args[1:], out)
 	case "complete":
@@ -356,6 +359,26 @@ func negotiateDefer(args []string, out io.Writer) error {
 	}
 	return protocolMutation(*dsn, id, "deferrals", negotiation.DeferInput{
 		QuestionID: *question, AgentID: *agent, Reason: *reason,
+	}, out)
+}
+
+// negotiateExplain answers what a person put back to you before they would
+// rule. It does not settle your question — it returns it to them.
+func negotiateExplain(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate explain", flag.ContinueOnError)
+	agent := fs.String("agent", agentID(), "delegated agent id")
+	question := fs.String("question", "", "question id")
+	reply := fs.String("reply", "", "what they asked you for")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" || *question == "" || strings.TrimSpace(*reply) == "" {
+		return fmt.Errorf("negotiation id, --question and --reply are required")
+	}
+	return protocolMutation(*dsn, id, "explanations", negotiation.ExplainInput{
+		QuestionID: *question, AgentID: *agent, Reply: *reply,
 	}, out)
 }
 

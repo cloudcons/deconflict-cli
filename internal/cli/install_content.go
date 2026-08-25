@@ -92,6 +92,19 @@ anything whose cost lands outside the repository are worth a person. Which of
 two agents goes first is not — that is yours, and a deadlock over it is
 evidence about how the work was split rather than a matter for a referee.
 
+A person may hand your question back rather than rule on it, asking for
+something they need first. That arrives in your mailbox and the question stops
+waiting on them until you reply:
+
+` + "```console" + `
+$ deconflict negotiate explain '<negotiation-id>' \
+    --question '<question-id>' --reply '<what they asked you for>'
+` + "```" + `
+
+Answer it plainly and without arguing your case again — they have read the
+question. Your reply does not settle anything; it puts the question back in
+front of them, still open.
+
 What stands is the most recent reply, whether it came from an agent or a
 person: a later one supersedes it, the earlier stays in the record, and the log
 says a correction happened. So an answer you have already acted on can change.
