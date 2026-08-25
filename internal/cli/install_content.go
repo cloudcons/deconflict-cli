@@ -51,30 +51,52 @@ acknowledging twice is harmless — correct the batch and send it again.
 
 ## When the decision is not yours
 
-Some things a mandate does not settle: which of two records wins when they
+Some things your mandate does not settle: which of two records wins when they
 disagree, whether a change may drop data, what to do when the instructions and
 the code point different ways. Guessing is a decision too, and it is one made
 where nobody can see it.
 
+Put it to the other agents first. One of them is often already holding the
+answer, because it is doing the work the question is about.
+
 ` + "```console" + `
-$ deconflict negotiate ask --scope mandate \
+$ deconflict negotiate ask '<negotiation-id>' \
     --subject '<the question, in one line>' \
     --body    '<what you established, and what turns on the answer>' \
     --assume  '<what you will do if nobody answers>'
 ` + "```" + `
 
 ` + "`--assume` is required, and it is the point: nothing blocks on a question." + `
-You say what you will do by default, the people accountable are told, and you
-carry on. If an answer arrives it is recorded against the negotiation with the
-work; if none does, you did what you said you would, in the open.
+You say what you will do by default, and you carry on. Silence means you did
+what you said you would, in the open.
 
-` + "`--scope mandate` reaches the human accountable for you. `--scope agreement`" + `
-reaches the humans behind every participant, when the answer changes what
-somebody else has already committed to. Either way what stands is the most
-recent answer: a later one supersedes it, the earlier stays in the record, and
-the negotiation log says a correction happened. So an answer you have already
-acted on can change, and it is worth re-reading the question before you rely on
-it — ` + "`deconflict negotiate show '<negotiation-id>'`" + ` prints every reply in order.
+When another agent asks something you can settle, settle it. This is the
+ordinary case, not a favour:
+
+` + "```console" + `
+$ deconflict negotiate resolve '<negotiation-id>' \
+    --question '<question-id>' --answer '<what you know that settles it>'
+` + "```" + `
+
+A human is reached only when an agent decides one has to be. Nothing escalates
+on a timer, so a question nobody defers is a question no person will ever see:
+
+` + "```console" + `
+$ deconflict negotiate defer '<negotiation-id>' \
+    --question '<question-id>' \
+    --reason   '<what about this is not the agents to settle>'
+` + "```" + `
+
+Defer sparingly and specifically. Policy, money, promises to customers, and
+anything whose cost lands outside the repository are worth a person. Which of
+two agents goes first is not — that is yours, and a deadlock over it is
+evidence about how the work was split rather than a matter for a referee.
+
+What stands is the most recent reply, whether it came from an agent or a
+person: a later one supersedes it, the earlier stays in the record, and the log
+says a correction happened. So an answer you have already acted on can change.
+` + "`deconflict negotiate show '<negotiation-id>'`" + ` prints every reply in order,
+and answers arrive in your mailbox — read it.
 
 ## Before you edit anything
 

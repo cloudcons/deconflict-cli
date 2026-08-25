@@ -32,6 +32,7 @@ Claiming
 Agent coordination
   deconflict negotiate request --paths <glob,...> --objective <text>
   deconflict negotiate <list|show|propose|accept|checkpoint|recover|complete|plans>
+  deconflict negotiate <ask|resolve|defer|answer>
                                              negotiate access and commitments
   deconflict message <register|send|inbox|watch|ack|presence>
                                              interoperable agent mailbox
