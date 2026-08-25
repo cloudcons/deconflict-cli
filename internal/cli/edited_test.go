@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -92,5 +94,38 @@ func TestRelToRepo(t *testing.T) {
 	// Outside the repo: left alone rather than turned into ../.. noise.
 	if got := relToRepo("/repo", "/etc/passwd"); got != "/etc/passwd" {
 		t.Errorf("outside repo: %q", got)
+	}
+}
+
+// git reports the worktree root as its real path and an editor hands over the
+// path the user typed, so one of them having gone through a symlink used to
+// mean no claim covered any file. Rel returned a "../.." path, the absolute
+// path fell through, and matching it against a glob like "src/**" failed every
+// time — so the pre-write warning stopped firing entirely for anybody whose
+// checkout sits under a linked path. On macOS that is anything under /tmp.
+func TestRelToRepoLooksThroughSymlinks(t *testing.T) {
+	real := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(real, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	// The root as git reports it, the path as an editor supplies it.
+	// a.go deliberately does not exist: this runs before the write, and the
+	// write is frequently the thing that creates the file.
+	if got := relToRepo(real, filepath.Join(link, "src", "a.go")); got != "src/a.go" {
+		t.Errorf("relToRepo(real, linked) = %q, want src/a.go", got)
+	}
+	// And the other way round, since either side may be the resolved one.
+	if got := relToRepo(link, filepath.Join(real, "src", "a.go")); got != "src/a.go" {
+		t.Errorf("relToRepo(linked, real) = %q, want src/a.go", got)
+	}
+	// A path genuinely outside the repository is still reported as it came.
+	outside := filepath.Join(t.TempDir(), "elsewhere.go")
+	if got := relToRepo(real, outside); got != outside {
+		t.Errorf("relToRepo of an unrelated path = %q, want it unchanged", got)
 	}
 }
