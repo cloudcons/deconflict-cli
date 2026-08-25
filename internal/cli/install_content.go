@@ -39,6 +39,16 @@ Receiving a message is not agreement. Inspect the referenced negotiation, then
 propose, counterpropose, accept, checkpoint, or recover explicitly. Acknowledge
 the delivery after processing it; acknowledgement is not proposal acceptance.
 
+Reading the inbox does not empty it. Anything left unacknowledged is delivered
+again next session, so clear a batch you have worked through in one call:
+
+` + "```console" + `
+$ deconflict message ack '<delivery-id>' '<delivery-id>' '<delivery-id>'
+` + "```" + `
+
+A batch is refused whole if any id names nothing in your mailbox, and
+acknowledging twice is harmless — correct the batch and send it again.
+
 ## Before you edit anything
 
 ` + "```console" + `

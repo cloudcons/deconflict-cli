@@ -21,7 +21,7 @@ const messageUsage = `deconflict message — interoperable mailbox for autonomou
   send       send a typed message to one or more agents
   inbox      receive durable pending messages
   watch      wait for and print messages as they arrive
-  ack        acknowledge one delivered message
+  ack        acknowledge one or more delivered messages
   presence   show live instances for an agent
 `
 
@@ -175,26 +175,77 @@ func messageWatch(args []string, out io.Writer) error {
 	return nil
 }
 
+// takeIDs is takeID for a batch: every leading argument up to the first flag.
+func takeIDs(args []string) ([]string, []string) {
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			return args[:i:i], args[i:]
+		}
+	}
+	return args, nil
+}
+
+// parseIDs parses flags that have ids mixed in among them. flag stops at the
+// first argument that is not a flag, so `dlv_a --agent bo dlv_b --store …`
+// would otherwise silently drop --store and send the batch wherever the
+// environment happened to point — which is a bad way to find out that an
+// acknowledgement went to the wrong registry. Each pass consumes at least the
+// id that stopped the last one, so this terminates.
+func parseIDs(fs *flag.FlagSet, args []string) ([]string, error) {
+	ids := []string{}
+	for {
+		leading, rest := takeIDs(args)
+		ids = append(ids, leading...)
+		if len(rest) == 0 {
+			return ids, nil
+		}
+		if err := fs.Parse(rest); err != nil {
+			return nil, err
+		}
+		args = fs.Args()
+	}
+}
+
+// messageAck acknowledges a whole processed batch, because that is the unit an
+// agent works in: a session hook hands over everything pending, the agent acts
+// on it, and one call says so. Ids may be given as arguments or through
+// --ids; either side of the flags is accepted, since `ack dlv_a --agent x
+// dlv_b` is what a shell makes easy to type.
 func messageAck(args []string, out io.Writer) error {
-	id, rest := takeID(args)
 	fs := flag.NewFlagSet("message ack", flag.ContinueOnError)
 	agent := fs.String("agent", agentID(), "recipient agent id")
+	list := fs.String("ids", "", "comma-separated delivery ids")
 	dsn := fs.String("store", "", "registry URL")
-	if err := fs.Parse(rest); err != nil {
+	ids, err := parseIDs(fs, args)
+	if err != nil {
 		return err
 	}
-	if id == "" {
+	ids = append(ids, splitList(*list)...)
+	if len(ids) == 0 {
 		return fmt.Errorf("delivery id is required")
+	}
+	if len(ids) > messaging.MaxAcknowledgeBatch {
+		return fmt.Errorf("a batch acknowledges at most %d deliveries, got %d", messaging.MaxAcknowledgeBatch, len(ids))
 	}
 	h, err := negotiationClient(*dsn)
 	if err != nil {
 		return err
 	}
-	var item messaging.Message
-	if err = h.JSON(http.MethodPost, "/v1/messages/"+url.PathEscape(id)+"/ack", map[string]string{"agent_id": *agent}, &item); err != nil {
+	// One id keeps the single-delivery response it has always printed; asking
+	// for a batch is what produces a batch.
+	if len(ids) == 1 {
+		var item messaging.Message
+		if err = h.JSON(http.MethodPost, "/v1/messages/"+url.PathEscape(ids[0])+"/ack", map[string]string{"agent_id": *agent}, &item); err != nil {
+			return err
+		}
+		return printProtocol(out, item)
+	}
+	in := map[string]any{"agent_id": *agent, "delivery_ids": ids}
+	var items []messaging.Message
+	if err = h.JSON(http.MethodPost, "/v1/messages/ack", in, &items); err != nil {
 		return err
 	}
-	return printProtocol(out, item)
+	return printProtocol(out, items)
 }
 
 func messagePresence(args []string, out io.Writer) error {

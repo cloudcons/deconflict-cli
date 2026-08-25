@@ -159,7 +159,7 @@ func mailboxContext(dsn, cwd string, in hookInput) string {
 	// redelivered at the next session start, which is the failure everyone
 	// would rather have.
 	b.WriteString("\n\nTreat delivery as a signal, not consent. Inspect the negotiation before proposing, accepting, or changing shared resources.")
-	b.WriteString("\nThese stay in your mailbox until you acknowledge them, and will be delivered again next session: `deconflict message ack <delivery-id>` once you have acted on one.")
+	b.WriteString("\nThese stay in your mailbox until you acknowledge them, and will be delivered again next session: `deconflict message ack <delivery-id>` once you have acted on one, or `deconflict message ack <id> <id> ...` for a batch you have worked through.")
 	return b.String()
 }
 
