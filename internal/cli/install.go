@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -36,6 +37,71 @@ type installChange struct {
 	path   string
 	what   string
 	action string // "wrote", "updated", "already set"
+}
+
+
+// codexEvents maps the hook event names we install to the snake_case form Codex
+// uses in its trust keys.
+var codexEvents = map[string]string{"SessionStart": "session_start", "PreToolUse": "pre_tool_use"}
+
+// untrustedCodexHooks reports the hooks we installed that Codex will not run.
+//
+// Codex trusts a hook command by hash, keyed on where it sits in hooks.json:
+// [hooks.state."<hooks.json>:<event>:<group>:<index>"]. We append ours as a new
+// group, so on any machine that already has a hook for the same event ours
+// lands at an index no trust entry covers. Codex then runs the trusted hook and
+// ignores ours, and the install reports success over a hook that never fires.
+//
+// That is not hypothetical. A Codex agent edited a file another agent had
+// claimed while this hook was installed, enabled, and generating exactly the
+// right warning — which Codex discarded unread, because it was untrusted.
+//
+// We deliberately do not write the trust entry ourselves. That hash is Codex
+// asking a person to vouch for a command before it runs on every edit, and a
+// tool that forges its own entry has quietly helped itself to that. Reporting
+// the gap is the honest thing this can do.
+func untrustedCodexHooks(hooksPath, configPath string) []string {
+	doc, err := readJSONObject(hooksPath)
+	if err != nil {
+		return nil
+	}
+	hooks, _ := doc["hooks"].(map[string]any)
+	if hooks == nil {
+		return nil
+	}
+	config, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil
+	}
+	trusted := string(config)
+
+	var missing []string
+	for event, snake := range codexEvents {
+		groups, _ := hooks[event].([]any)
+		for i, g := range groups {
+			group, ok := g.(map[string]any)
+			if !ok {
+				continue
+			}
+			entries, _ := group["hooks"].([]any)
+			for j, e := range entries {
+				entry, ok := e.(map[string]any)
+				if !ok {
+					continue
+				}
+				cmd, _ := entry["command"].(string)
+				if !strings.Contains(cmd, " hook ") {
+					continue // somebody else's hook; their trust is their business
+				}
+				key := fmt.Sprintf("%s:%s:%d:%d", hooksPath, snake, i, j)
+				if !strings.Contains(trusted, key) {
+					missing = append(missing, event)
+				}
+			}
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 func cmdInstall(args []string, out io.Writer) error {
@@ -130,6 +196,20 @@ func cmdInstall(args []string, out io.Writer) error {
 		fmt.Fprintln(out, "\n(dry run — nothing was written)")
 		return nil
 	}
+	for _, target := range targets {
+		if target != "codex" {
+			continue
+		}
+		hooksPath := filepath.Join(home, ".codex", "hooks.json")
+		if missing := untrustedCodexHooks(hooksPath, filepath.Join(home, ".codex", "config.toml")); len(missing) > 0 && !*dry {
+			fmt.Fprintf(out, "\nCodex will not run these hooks yet: %s\n", strings.Join(missing, ", "))
+			fmt.Fprint(out, "  Codex trusts a hook command by hash and has no entry for ours, so it is\n"+
+				"  installed, enabled, and silently skipped — you would get no overlap warning\n"+
+				"  at all. Start codex once interactively and approve the hook when it asks, or\n"+
+				"  for unattended runs pass --dangerously-bypass-hook-trust.\n")
+		}
+	}
+
 	fmt.Fprintf(out, "\nInstalled for: %s\n", strings.Join(targets, ", "))
 	fmt.Fprintln(out, "Sign in with `deconflict login` if this registry has accounts enabled;")
 	fmt.Fprintln(out, "the hooks stay silent when nobody else is standing on your files.")
