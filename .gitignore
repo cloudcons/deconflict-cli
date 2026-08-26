@@ -19,3 +19,6 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Worktrees created for agent runs live here and are never committed.
+.worktrees/
