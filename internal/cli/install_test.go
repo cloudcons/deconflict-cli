@@ -254,3 +254,62 @@ func commands(doc map[string]any, event string) []string {
 	}
 	return out
 }
+
+// Codex trusts a hook command by hash, keyed on where it sits in hooks.json.
+// We append ours as a new group, so on a machine that already has a hook for
+// the same event ours lands at an index no trust entry covers — Codex runs the
+// trusted one and ignores ours. The install said "wrote hooks" over a hook that
+// never fired, and an agent edited a file another agent had claimed while the
+// warning was being generated correctly and discarded unread.
+func TestInstallReportsACodexHookCodexWillNotRun(t *testing.T) {
+	dir := t.TempDir()
+	hooks := filepath.Join(dir, "hooks.json")
+	config := filepath.Join(dir, "config.toml")
+
+	// Somebody else's hook at index 0, ours appended at index 1.
+	write := func(path, body string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(hooks, `{"hooks":{"PreToolUse":[
+	  {"hooks":[{"type":"command","command":"/opt/other/tool watch"}]},
+	  {"hooks":[{"type":"command","command":"/usr/local/bin/deconflict hook pre-tool"}]}
+	],"SessionStart":[
+	  {"hooks":[{"type":"command","command":"/usr/local/bin/deconflict hook session-start"}]}
+	]}}`)
+	// Only index 0 of PreToolUse is trusted, and SessionStart's index 0 is ours.
+	write(config, `[hooks.state."`+hooks+`:pre_tool_use:0:0"]
+trusted_hash = "sha256:aaa"
+
+[hooks.state."`+hooks+`:session_start:0:0"]
+trusted_hash = "sha256:bbb"
+`)
+
+	missing := untrustedCodexHooks(hooks, config)
+	if len(missing) != 1 || missing[0] != "PreToolUse" {
+		t.Fatalf("untrusted hooks = %v, want just PreToolUse — ours sits at index 1 and nothing trusts it", missing)
+	}
+}
+
+// A hook that is trusted must not be reported, or the warning becomes noise
+// people learn to scroll past.
+func TestATrustedCodexHookIsNotReported(t *testing.T) {
+	dir := t.TempDir()
+	hooks := filepath.Join(dir, "hooks.json")
+	config := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(hooks, []byte(`{"hooks":{"PreToolUse":[
+	  {"hooks":[{"type":"command","command":"/usr/local/bin/deconflict hook pre-tool"}]}
+	]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config, []byte(`[hooks.state."`+hooks+`:pre_tool_use:0:0"]
+trusted_hash = "sha256:aaa"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if missing := untrustedCodexHooks(hooks, config); len(missing) != 0 {
+		t.Errorf("a trusted hook was reported as untrusted: %v", missing)
+	}
+}
