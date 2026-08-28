@@ -39,7 +39,6 @@ type installChange struct {
 	action string // "wrote", "updated", "already set"
 }
 
-
 // codexEvents maps the hook event names we install to the snake_case form Codex
 // uses in its trust keys.
 var codexEvents = map[string]string{"SessionStart": "session_start", "PreToolUse": "pre_tool_use"}
@@ -232,11 +231,11 @@ func installClaudeMCP(path, bin string, dry bool) (installChange, error) {
 }
 
 func installCodexMCP(path, bin string, dry bool) (installChange, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
+	before, err := readText(path)
+	if err != nil {
 		return installChange{}, err
 	}
-	body := string(raw)
+	body := before
 	header := "[mcp_servers.deconflict]"
 	section := header + "\ncommand = " + strconv.Quote(bin) + "\nargs = [\"mcp\"]\n"
 	start := strings.Index(body, header)
@@ -257,7 +256,9 @@ func installCodexMCP(path, bin string, dry bool) (installChange, error) {
 		if argsLine.MatchString(updated) {
 			updated = argsLine.ReplaceAllString(updated, `args = ["mcp"]`)
 		} else {
-			updated += `\nargs = ["mcp"]`
+			// A raw string here would append a literal backslash-n and corrupt
+			// the file, which is what this did until the quoting was fixed.
+			updated += "\n" + `args = ["mcp"]`
 		}
 		body = body[:start] + updated + body[end:]
 	} else {
@@ -266,16 +267,7 @@ func installCodexMCP(path, bin string, dry bool) (installChange, error) {
 		}
 		body += "\n" + section
 	}
-	if body == string(raw) {
-		return installChange{path, "Deconflict MCP mailbox", "already set"}, nil
-	}
-	if dry {
-		return installChange{path, "Deconflict MCP mailbox", "would set"}, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return installChange{}, err
-	}
-	return installChange{path, "Deconflict MCP mailbox", "updated"}, os.WriteFile(path, []byte(body), 0o644)
+	return writeTextIfChanged(path, before, body, "Deconflict MCP mailbox", dry)
 }
 
 // resolveAgents decides which agents to install for. "auto" looks for evidence
@@ -337,9 +329,12 @@ func hookBinary() string {
 	return self
 }
 
-// ---------- Claude Code ----------
+// ---------- hooks ----------
 
-func installClaudeHooks(path, bin string, dry bool) (installChange, error) {
+// installHooks writes the two hooks into an agent's JSON settings. Claude and
+// Codex take the identical file shape and differ only in what they call an
+// edit, so the matcher is the only thing either of them supplies.
+func installHooks(path, bin, editMatcher string, dry bool) (installChange, error) {
 	doc, err := readJSONObject(path)
 	if err != nil {
 		return installChange{}, err
@@ -351,10 +346,20 @@ func installClaudeHooks(path, bin string, dry bool) (installChange, error) {
 		hooks = map[string]any{}
 	}
 	upsertHookGroup(hooks, "SessionStart", "", bin+" hook session-start")
-	upsertHookGroup(hooks, "PreToolUse", "Edit|Write|NotebookEdit", bin+" hook pre-tool")
+	upsertHookGroup(hooks, "PreToolUse", editMatcher, bin+" hook pre-tool")
 	doc["hooks"] = hooks
 
 	return writeIfChanged(path, before, doc, "session-start + pre-write hooks", dry)
+}
+
+func installClaudeHooks(path, bin string, dry bool) (installChange, error) {
+	return installHooks(path, bin, "Edit|Write|NotebookEdit", dry)
+}
+
+// installCodexHooks carries Edit|Write as well as Codex's own apply_patch, so
+// one file serves a machine that runs both agents.
+func installCodexHooks(path, bin string, dry bool) (installChange, error) {
+	return installHooks(path, bin, "apply_patch|Edit|Write", dry)
 }
 
 // upsertHookGroup adds one hook, or updates the one already installed.
@@ -403,26 +408,6 @@ func upsertHookGroup(hooks map[string]any, event, matcher, command string) {
 
 // ---------- Codex ----------
 
-func installCodexHooks(path, bin string, dry bool) (installChange, error) {
-	doc, err := readJSONObject(path)
-	if err != nil {
-		return installChange{}, err
-	}
-	before := jsonString(doc)
-
-	hooks, _ := doc["hooks"].(map[string]any)
-	if hooks == nil {
-		hooks = map[string]any{}
-	}
-	upsertHookGroup(hooks, "SessionStart", "", bin+" hook session-start")
-	// apply_patch is how Codex describes an edit; Edit|Write are carried too so
-	// one file serves a machine that runs both agents.
-	upsertHookGroup(hooks, "PreToolUse", "apply_patch|Edit|Write", bin+" hook pre-tool")
-	doc["hooks"] = hooks
-
-	return writeIfChanged(path, before, doc, "session-start + pre-write hooks", dry)
-}
-
 var codexFeatures = regexp.MustCompile(`(?m)^\[features\]\s*$`)
 var codexHooksSet = regexp.MustCompile(`(?m)^\s*codex_hooks\s*=`)
 
@@ -432,11 +417,11 @@ var codexHooksSet = regexp.MustCompile(`(?m)^\s*codex_hooks\s*=`)
 // Edited as text rather than parsed: this is one boolean in a file the user owns
 // and comments in, and a TOML round-trip would reformat all of it to add a line.
 func enableCodexHooks(path string, dry bool) (installChange, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
+	before, err := readText(path)
+	if err != nil {
 		return installChange{}, err
 	}
-	body := string(raw)
+	body := before
 	if codexHooksSet.MatchString(body) {
 		return installChange{path, "codex_hooks feature", "already set"}, nil
 	}
@@ -454,36 +439,17 @@ func enableCodexHooks(path string, dry bool) (installChange, error) {
 		}
 		body += "\n[features]\ncodex_hooks = true\n"
 	}
-	if dry {
-		return installChange{path, "codex_hooks feature", "would set"}, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return installChange{}, err
-	}
-	return installChange{path, "codex_hooks feature", "updated"}, os.WriteFile(path, []byte(body), 0o644)
+	return writeTextIfChanged(path, before, body, "codex_hooks feature", dry)
 }
 
 // ---------- skill and guidance ----------
 
 func installSkill(path string, dry bool) (installChange, error) {
-	existing, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
+	before, err := readText(path)
+	if err != nil {
 		return installChange{}, err
 	}
-	if string(existing) == skillMarkdown {
-		return installChange{path, "claiming workflow skill", "already set"}, nil
-	}
-	if dry {
-		return installChange{path, "claiming workflow skill", "would write"}, nil
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return installChange{}, err
-	}
-	action := "wrote"
-	if len(existing) > 0 {
-		action = "updated"
-	}
-	return installChange{path, "claiming workflow skill", action}, os.WriteFile(path, []byte(skillMarkdown), 0o644)
+	return writeTextIfChanged(path, before, skillMarkdown, "claiming workflow skill", dry)
 }
 
 const guidanceStart = "<!-- deconflict:start -->"
@@ -499,11 +465,10 @@ const guidanceEnd = "<!-- deconflict:end -->"
 //
 // Fenced by markers so a re-install replaces its own block and nothing else.
 func installGuidance(path string, dry bool) (installChange, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
+	body, err := readText(path)
+	if err != nil {
 		return installChange{}, err
 	}
-	body := string(raw)
 	block := guidanceStart + "\n" + guidanceMarkdown + guidanceEnd + "\n"
 
 	var updated string
@@ -523,18 +488,7 @@ func installGuidance(path string, dry bool) (installChange, error) {
 		updated = body + "\n" + block
 	}
 
-	name := filepath.Base(path)
-	if updated == body {
-		return installChange{path, name + " rule", "already set"}, nil
-	}
-	if dry {
-		return installChange{path, name + " rule", "would update"}, nil
-	}
-	action := "wrote"
-	if len(raw) > 0 {
-		action = "updated"
-	}
-	return installChange{path, name + " rule", action}, os.WriteFile(path, []byte(updated), 0o644)
+	return writeTextIfChanged(path, body, updated, filepath.Base(path)+" rule", dry)
 }
 
 // ---------- shared ----------
@@ -565,21 +519,47 @@ func jsonString(v any) string {
 }
 
 func writeIfChanged(path, before string, doc map[string]any, what string, dry bool) (installChange, error) {
-	after := jsonString(doc)
-	if after == before {
+	return writeTextIfChanged(path, before, jsonString(doc)+"\n", what, dry)
+}
+
+// readText reads a file this install may be the first to create. A missing file
+// is an empty one here: every caller is about to add its own section to it.
+func readText(path string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+// writeTextIfChanged is the tail every edit here shares: already right, not
+// writing today, or write it.
+//
+// The dry-run word mirrors the real one — "would write" against "wrote" — so a
+// dry run reads as a prediction of the run it is predicting. There used to be
+// three different words for it across four writers, which made the summary look
+// like three different things were happening.
+func writeTextIfChanged(path, before, after, what string, dry bool) (installChange, error) {
+	// A JSON file this install created reads back as an empty object, so both
+	// spellings of "there was nothing here" mean a fresh write.
+	fresh := before == "" || before == "{}"
+	if strings.TrimSpace(after) == strings.TrimSpace(before) {
 		return installChange{path, what, "already set"}, nil
 	}
 	if dry {
+		if fresh {
+			return installChange{path, what, "would write"}, nil
+		}
 		return installChange{path, what, "would update"}, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return installChange{}, err
 	}
 	action := "updated"
-	if before == "{}" {
+	if fresh {
 		action = "wrote"
 	}
-	return installChange{path, what, action}, os.WriteFile(path, []byte(after+"\n"), 0o644)
+	return installChange{path, what, action}, os.WriteFile(path, []byte(after), 0o644)
 }
 
 // rel shortens paths for the summary — an absolute path repeated six times is

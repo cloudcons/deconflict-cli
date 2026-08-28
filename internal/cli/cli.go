@@ -136,6 +136,32 @@ func Run(args []string, stdout, stderr io.Writer) int {
 
 func openStore(dsn string) (store.Store, error) { return store.Open(dsn) }
 
+// encodeJSON is how every --json flag in this package answers. One indentation,
+// decided once: three copies of this under three names had grown up across the
+// package, and a machine-readable output that formats itself differently
+// depending on which subcommand produced it is one nobody can diff.
+func encodeJSON(out io.Writer, v any) error {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
+// resolveClaimID works out which claim a command is about: the one named on the
+// command line, before or after the flags, or failing that the one this
+// worktree recorded when it was announced.
+func resolveClaimID(id string, fs *flag.FlagSet, dir string) (string, error) {
+	if id == "" {
+		id = fs.Arg(0)
+	}
+	if id == "" {
+		id = readCurrent(dir)
+	}
+	if id == "" {
+		return "", fmt.Errorf("no claim id given and none recorded for this worktree")
+	}
+	return id, nil
+}
+
 // takeID pulls a leading positional claim id out of the argument list.
 //
 // Go's flag package stops parsing at the first non-flag argument, so
@@ -278,9 +304,7 @@ func cmdClaim(args []string, out io.Writer) error {
 	writeCurrent(cwd, c.ID)
 
 	if *asJSON {
-		enc := json.NewEncoder(out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(map[string]any{"claim": c, "conflicts": conflicts})
+		return encodeJSON(out, map[string]any{"claim": c, "conflicts": conflicts})
 	}
 	fmt.Fprintf(out, "claimed %s  %s  (lease %s)\n", c.ID, strings.Join(c.Paths, ", "), *ttl)
 	if len(conflicts) == 0 {
@@ -346,9 +370,7 @@ func cmdCheck(args []string, out io.Writer) error {
 	}
 	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), claim.NormalizeAll(list), now, mine, st.Settings().IgnorePaths)
 	if *asJSON {
-		enc := json.NewEncoder(out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(conflicts)
+		return encodeJSON(out, conflicts)
 	}
 	if len(conflicts) == 0 {
 		if !*quiet {
@@ -397,9 +419,7 @@ func cmdList(args []string, out io.Writer) error {
 		sel = append(sel, c)
 	}
 	if *asJSON {
-		enc := json.NewEncoder(out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(sel)
+		return encodeJSON(out, sel)
 	}
 	if len(sel) == 0 {
 		fmt.Fprintln(out, "no claims.")
@@ -446,14 +466,9 @@ func cmdRelease(args []string, out io.Writer) error {
 		return err
 	}
 	cwd, _ := os.Getwd()
-	if id == "" {
-		id = fs.Arg(0)
-	}
-	if id == "" {
-		id = readCurrent(cwd)
-	}
-	if id == "" {
-		return fmt.Errorf("no claim id given and none recorded for this worktree")
+	id, err := resolveClaimID(id, fs, cwd)
+	if err != nil {
+		return err
 	}
 	st, err := openStore(*dsn)
 	if err != nil {
@@ -484,14 +499,9 @@ func cmdRenew(args []string, out io.Writer) error {
 		return err
 	}
 	cwd, _ := os.Getwd()
-	if id == "" {
-		id = fs.Arg(0)
-	}
-	if id == "" {
-		id = readCurrent(cwd)
-	}
-	if id == "" {
-		return fmt.Errorf("no claim id given and none recorded for this worktree")
+	id, err := resolveClaimID(id, fs, cwd)
+	if err != nil {
+		return err
 	}
 	st, err := openStore(*dsn)
 	if err != nil {
@@ -535,11 +545,9 @@ func cmdAmend(args []string, out io.Writer) error {
 		return err
 	}
 	cwd, _ := os.Getwd()
-	if id == "" {
-		id = readCurrent(cwd)
-	}
-	if id == "" {
-		return fmt.Errorf("no claim id given and none recorded for this worktree")
+	id, err := resolveClaimID(id, fs, cwd)
+	if err != nil {
+		return err
 	}
 	if *paths == "" && *not == "" && *what == "" && *why == "" && *iface == "" {
 		return fmt.Errorf("nothing to amend: pass at least one of --paths, --not, --what, --why or --interface")
@@ -729,9 +737,7 @@ func cmdSettings(args []string, out io.Writer) error {
 	}
 	cfg := st.Settings()
 	if *asJSON {
-		enc := json.NewEncoder(out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(cfg)
+		return encodeJSON(out, cfg)
 	}
 	fmt.Fprintf(out, "registry:       %s\n", st.Describe())
 	fmt.Fprintf(out, "default lease:  %s (max %s)\n", cfg.DefaultLease.Std(), cfg.MaxLease.Std())

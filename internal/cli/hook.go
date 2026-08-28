@@ -339,7 +339,7 @@ func preToolContext(dsn, cwd string, in hookInput) string {
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(claim.RenderBrief(repeat, now))
+		b.WriteString(claim.RenderBrief(repeat))
 	}
 	// Somebody else's ground and your own are different facts about the same
 	// edit, and an agent that is told only the first will widen quietly.

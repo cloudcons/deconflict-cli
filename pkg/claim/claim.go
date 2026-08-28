@@ -121,10 +121,10 @@ func Fold(events []Event) []Claim {
 		if e.Claim.ID == "" {
 			continue
 		}
-		if _, seen := byID[e.Claim.ID]; !seen {
+		cur, seen := byID[e.Claim.ID]
+		if !seen {
 			order = append(order, e.Claim.ID)
 		}
-		cur, seen := byID[e.Claim.ID]
 		switch e.Op {
 		case "claim":
 			byID[e.Claim.ID] = e.Claim
@@ -269,18 +269,26 @@ func dropDisclaimed(pairs [][2]string, notPaths []string) [][2]string {
 	}
 	var kept [][2]string
 	for _, p := range pairs {
-		disclaimed := false
-		for _, n := range notPaths {
-			if Covers(n, p[0]) {
-				disclaimed = true
-				break
-			}
-		}
-		if !disclaimed {
+		if !coveredByAny(notPaths, p[0]) {
 			kept = append(kept, p)
 		}
 	}
 	return kept
+}
+
+// coveredByAny reports whether a claimant's "not touching" list wholly contains
+// a path.
+//
+// Containment, not intersection: "I am not touching src/auth/middleware.go"
+// does not disclaim src/**/*.go. Getting that backwards would silence real
+// overlaps, which is the one failure this system cannot afford.
+func coveredByAny(notPaths []string, path string) bool {
+	for _, n := range notPaths {
+		if Covers(n, path) {
+			return true
+		}
+	}
+	return false
 }
 
 // Pair is a mutual overlap between two active claims, for the dashboard.
@@ -326,18 +334,8 @@ func disclaimed(a, b Claim) bool {
 	if len(a.NotPaths) == 0 {
 		return false
 	}
-	shared := PatternsOverlap(a.Paths, b.Paths)
-	for _, p := range shared {
-		covered := false
-		for _, n := range a.NotPaths {
-			// Containment, not intersection: "I am not touching
-			// src/auth/middleware.go" does not disclaim src/**/*.go.
-			if Covers(n, p[1]) {
-				covered = true
-				break
-			}
-		}
-		if !covered {
+	for _, p := range PatternsOverlap(a.Paths, b.Paths) {
+		if !coveredByAny(a.NotPaths, p[1]) {
 			return false
 		}
 	}
@@ -354,7 +352,9 @@ func disclaimed(a, b Claim) bool {
 // all of it, and repeating it costs context and teaches the model that these
 // blocks are boilerplate to skim. What it does not yet know is the one fact
 // this line carries: that this file is in there too.
-func RenderBrief(cs []Conflict, now time.Time) string {
+// Unlike Render it takes no clock: the brief form carries no ages or leases,
+// because the block that did has already been shown.
+func RenderBrief(cs []Conflict) string {
 	if len(cs) == 0 {
 		return ""
 	}
