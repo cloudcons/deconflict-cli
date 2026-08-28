@@ -92,12 +92,6 @@ func negotiationClient(dsn string) (*store.HTTPStore, error) {
 	}
 	return h, nil
 }
-func printProtocol(out io.Writer, v any) error {
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
-}
-
 func negotiateRequest(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("negotiate request", flag.ContinueOnError)
 	paths := fs.String("paths", "", "comma-separated paths or globs")
@@ -127,7 +121,7 @@ func negotiateRequest(args []string, out io.Writer) error {
 	if err = h.JSON(http.MethodPost, "/v1/negotiations", in, &v); err != nil {
 		return err
 	}
-	return printProtocol(out, v)
+	return encodeJSON(out, v)
 }
 
 func negotiateList(args []string, out io.Writer) error {
@@ -157,7 +151,7 @@ func negotiateList(args []string, out io.Writer) error {
 	if err = h.JSON(http.MethodGet, path, nil, &v); err != nil {
 		return err
 	}
-	return printProtocol(out, v)
+	return encodeJSON(out, v)
 }
 func negotiateShow(args []string, out io.Writer) error {
 	id, rest := takeID(args)
@@ -177,7 +171,7 @@ func negotiateShow(args []string, out io.Writer) error {
 	if err = h.JSON(http.MethodGet, "/v1/negotiations/"+url.PathEscape(id), nil, &v); err != nil {
 		return err
 	}
-	return printProtocol(out, v)
+	return encodeJSON(out, v)
 }
 func readProtocolFile(path string, out any) error {
 	if path == "" {
@@ -407,7 +401,7 @@ func protocolMutation(dsn, id, action string, in any, out io.Writer) error {
 	if err = h.JSON(http.MethodPost, "/v1/negotiations/"+url.PathEscape(id)+"/"+action, in, &v); err != nil {
 		return err
 	}
-	return printProtocol(out, v)
+	return encodeJSON(out, v)
 }
 func negotiatePlans(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("negotiate plans", flag.ContinueOnError)
@@ -428,5 +422,5 @@ func negotiatePlans(args []string, out io.Writer) error {
 	if err = h.JSON(http.MethodGet, path, nil, &v); err != nil {
 		return err
 	}
-	return printProtocol(out, v)
+	return encodeJSON(out, v)
 }

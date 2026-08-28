@@ -96,7 +96,7 @@ func messageRegister(args []string, out io.Writer) error {
 	if err = h.JSON(http.MethodPost, "/v1/agents/register", in, &r); err != nil {
 		return err
 	}
-	return printProtocol(out, r)
+	return encodeJSON(out, r)
 }
 
 func messageSend(args []string, out io.Writer) error {
@@ -124,7 +124,7 @@ func messageSend(args []string, out io.Writer) error {
 	if err = h.JSON(http.MethodPost, "/v1/messages", in, &items); err != nil {
 		return err
 	}
-	return printProtocol(out, items)
+	return encodeJSON(out, items)
 }
 
 func messageInbox(args []string, out io.Writer) error {
@@ -148,7 +148,7 @@ func messageInbox(args []string, out io.Writer) error {
 	if err = h.JSON(http.MethodGet, "/v1/messages?"+q.Encode(), nil, &items); err != nil {
 		return err
 	}
-	return printProtocol(out, items)
+	return encodeJSON(out, items)
 }
 
 func messageWatch(args []string, out io.Writer) error {
@@ -238,14 +238,14 @@ func messageAck(args []string, out io.Writer) error {
 		if err = h.JSON(http.MethodPost, "/v1/messages/"+url.PathEscape(ids[0])+"/ack", map[string]string{"agent_id": *agent}, &item); err != nil {
 			return err
 		}
-		return printProtocol(out, item)
+		return encodeJSON(out, item)
 	}
 	in := map[string]any{"agent_id": *agent, "delivery_ids": ids}
 	var items []messaging.Message
 	if err = h.JSON(http.MethodPost, "/v1/messages/ack", in, &items); err != nil {
 		return err
 	}
-	return printProtocol(out, items)
+	return encodeJSON(out, items)
 }
 
 func messagePresence(args []string, out io.Writer) error {
@@ -266,5 +266,5 @@ func messagePresence(args []string, out io.Writer) error {
 	if err = h.JSON(http.MethodGet, "/v1/agents/"+url.PathEscape(id)+"/presence", nil, &items); err != nil {
 		return err
 	}
-	return printProtocol(out, items)
+	return encodeJSON(out, items)
 }

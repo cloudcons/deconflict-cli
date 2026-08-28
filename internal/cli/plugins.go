@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -255,12 +254,6 @@ func cmdGenkey(args []string, out io.Writer) error {
 }
 
 // ---------- small helpers ----------
-
-func encodeJSON(out io.Writer, v any) error {
-	enc := json.NewEncoder(out)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
-}
 
 func urlEscape(s string) string { return url.PathEscape(s) }
 

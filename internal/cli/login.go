@@ -130,9 +130,7 @@ func cmdWhoami(args []string, out io.Writer) error {
 		return err
 	}
 	if *asJSON {
-		enc := json.NewEncoder(out)
-		enc.SetIndent("", "  ")
-		return enc.Encode(me)
+		return encodeJSON(out, me)
 	}
 	fmt.Fprintf(out, "registry: %s (%s mode)\n", base, me.Mode)
 	fmt.Fprintf(out, "you:      %s", me.User.Login)
