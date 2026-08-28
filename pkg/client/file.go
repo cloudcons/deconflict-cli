@@ -3,10 +3,8 @@ package client
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"github.com/cloudcons/deconflict-cli/pkg/claim"
 	"github.com/cloudcons/deconflict-cli/pkg/settings"
@@ -32,11 +30,13 @@ func (f *FileStore) Append(e claim.Event) error {
 	}
 	defer fh.Close()
 	// O_APPEND already makes a sub-page write atomic on Linux and macOS;
-	// flock is belt-and-braces for network filesystems.
-	if err := syscall.Flock(int(fh.Fd()), syscall.LOCK_EX); err != nil {
-		return fmt.Errorf("lock %s: %w", f.Path, err)
+	// the lock is belt-and-braces for network filesystems, and is a no-op on
+	// Windows for the reason given in lock_windows.go.
+	unlock, err := lockAppend(fh)
+	if err != nil {
+		return err
 	}
-	defer syscall.Flock(int(fh.Fd()), syscall.LOCK_UN)
+	defer unlock()
 
 	line, err := json.Marshal(e)
 	if err != nil {
