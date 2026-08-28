@@ -1,4 +1,4 @@
-package store
+package client
 
 import (
 	"bufio"
@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/cloudcons/deconflict/internal/claim"
-	"github.com/cloudcons/deconflict/internal/settings"
+	"github.com/cloudcons/deconflict-cli/pkg/claim"
+	"github.com/cloudcons/deconflict-cli/pkg/settings"
 )
 
 // FileStore is an append-only JSONL log on local disk.

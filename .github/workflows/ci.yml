@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # No database service and no browser: this module has no dependencies, so the
+  # job that used to take four minutes should take well under one. If it starts
+  # needing a service container, something has been imported that should not be.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go vet ./...
+      - run: go test -race ./...
+
+      # The acceptance test for the whole repository. `go mod graph` naming
+      # anything but this module means a dependency has crept back in, which is
+      # the one thing this split exists to prevent.
+      - name: No third-party dependencies
+        run: |
+          if [ -f go.sum ]; then
+            echo "go.sum exists — this module is meant to have no dependencies"
+            cat go.sum
+            exit 1
+          fi
+          graph=$(go mod graph | grep -v '^github.com/cloudcons/deconflict-cli ' | grep -v '^go@' || true)
+          if [ -n "$graph" ]; then
+            echo "unexpected modules in the graph:"
+            echo "$graph"
+            exit 1
+          fi
+
+  # Users install this on machines we do not choose, so the build matrix is the
+  # platforms rather than a single linux/amd64 that proves less than it looks.
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: go build ./cmd/deconflict

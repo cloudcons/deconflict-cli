@@ -28,7 +28,7 @@ func newHookRepo(t *testing.T) *hookRepo {
 	root := t.TempDir()
 	h := &hookRepo{
 		t:     t,
-		dsn:   "file:" + filepath.Join(root, "store.json"),
+		dsn:   "file:" + filepath.Join(root, "client.json"),
 		mine:  filepath.Join(root, "mine"),
 		other: filepath.Join(root, "other"),
 	}
@@ -105,7 +105,7 @@ func TestOneClaimWarnsOnceThenBriefly(t *testing.T) {
 		t.Fatalf("first edit should get the whole explanation, got %q", full)
 	}
 
-	for _, f := range []string{"store.go", "session.go", "cookie.go"} {
+	for _, f := range []string{"client.go", "session.go", "cookie.go"} {
 		b := h.preTool("s", "src/auth/"+f)
 		switch {
 		case b == "":
@@ -119,7 +119,7 @@ func TestOneClaimWarnsOnceThenBriefly(t *testing.T) {
 
 	// The same file twice is nothing new at all — including the first one,
 	// which is the case a naive fix leaves repeating forever.
-	for _, f := range []string{"token.go", "store.go"} {
+	for _, f := range []string{"token.go", "client.go"} {
 		if got := h.preTool("s", "src/auth/"+f); got != "" {
 			t.Errorf("%s warned again on revisit: %q", f, got)
 		}

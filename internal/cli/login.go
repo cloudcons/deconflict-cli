@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudcons/deconflict/internal/store"
+	"github.com/cloudcons/deconflict-cli/pkg/client"
 )
 
 // `deconflict login` — the device flow, from the terminal's side.
@@ -74,12 +74,12 @@ func cmdLogin(args []string, out io.Writer) error {
 		if poll.Token == "" {
 			return fmt.Errorf("the registry approved the sign-in but returned no token")
 		}
-		if err := store.SaveToken(base, poll.Token); err != nil {
+		if err := client.SaveToken(base, poll.Token); err != nil {
 			return fmt.Errorf("could not save the token: %w", err)
 		}
 		who := whoamiLine(base, poll.Token)
 		fmt.Fprintf(out, "\nsigned in%s\n", who)
-		fmt.Fprintf(out, "token saved to %s\n", store.CredentialsPath())
+		fmt.Fprintf(out, "token saved to %s\n", client.CredentialsPath())
 		return nil
 	}
 	return fmt.Errorf("timed out waiting for approval")
@@ -99,7 +99,7 @@ func cmdLogout(args []string, out io.Writer) error {
 			return err
 		}
 	}
-	if err := store.ForgetToken(base); err != nil {
+	if err := client.ForgetToken(base); err != nil {
 		return err
 	}
 	// The token stays valid on the server: forgetting it locally is not
@@ -126,7 +126,7 @@ func cmdWhoami(args []string, out io.Writer) error {
 		return err
 	}
 	var me meResp
-	if err := apiJSON(http.MethodGet, base+"/v1/me", store.TokenFor(base), nil, &me); err != nil {
+	if err := apiJSON(http.MethodGet, base+"/v1/me", client.TokenFor(base), nil, &me); err != nil {
 		return err
 	}
 	if *asJSON {
@@ -191,7 +191,7 @@ func cmdToken(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	token := store.TokenFor(base)
+	token := client.TokenFor(base)
 
 	switch sub {
 	case "list":

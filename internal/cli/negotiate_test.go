@@ -7,11 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/cloudcons/deconflict/internal/negotiation"
+	"github.com/cloudcons/deconflict-cli/pkg/protocol"
 )
 
 func TestNegotiateRequestUsesAuthenticatedProtocolTransport(t *testing.T) {
-	var got negotiation.AccessRequest
+	var got protocol.AccessRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/negotiations" {
 			t.Errorf("request = %s %s", r.Method, r.URL.Path)
@@ -23,7 +23,7 @@ func TestNegotiateRequestUsesAuthenticatedProtocolTransport(t *testing.T) {
 			t.Fatal(err)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(negotiation.Session{ID: "neg_test", Status: negotiation.Negotiating})
+		_ = json.NewEncoder(w).Encode(protocol.Session{ID: "neg_test", Status: protocol.Negotiating})
 	}))
 	defer server.Close()
 
@@ -49,13 +49,13 @@ func TestNegotiateRequestUsesAuthenticatedProtocolTransport(t *testing.T) {
 }
 
 func TestNegotiateLeaseSendsDelegatedAgentAndDuration(t *testing.T) {
-	var got negotiation.LeaseInput
+	var got protocol.LeaseInput
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/negotiations/neg_test/lease" {
 			t.Errorf("path = %s", r.URL.Path)
 		}
 		_ = json.NewDecoder(r.Body).Decode(&got)
-		_ = json.NewEncoder(w).Encode(negotiation.Session{ID: "neg_test", Status: negotiation.Executing})
+		_ = json.NewEncoder(w).Encode(protocol.Session{ID: "neg_test", Status: protocol.Executing})
 	}))
 	defer server.Close()
 

@@ -1,4 +1,4 @@
-// Package cli implements the `claims` command.
+// Package cli implements the `deconflict` command.
 package cli
 
 import (
@@ -12,10 +12,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudcons/deconflict/internal/claim"
-	"github.com/cloudcons/deconflict/internal/gitinfo"
-	"github.com/cloudcons/deconflict/internal/store"
+	"github.com/cloudcons/deconflict-cli/pkg/claim"
+	"github.com/cloudcons/deconflict-cli/internal/gitinfo"
+	"github.com/cloudcons/deconflict-cli/pkg/client"
 )
+
+// Version is stamped at build time:
+//
+//	go build -ldflags "-X github.com/cloudcons/deconflict-cli/internal/cli.Version=$(git describe --tags)"
+//
+// It exists so that a client and a registry that no longer ship as one binary
+// can be told apart in a bug report. "dev" is what an unstamped local build
+// says, which is the honest answer for one.
+var Version = "dev"
+
+// movedToServer answers the three commands that need a database credential.
+// They are not gone, and saying where they went is the difference between a
+// one-minute correction and a bug report.
+func movedToServer(cmd string) error {
+	return fmt.Errorf("`deconflict %s` is a registry operator's command and now lives in the deconflict-server binary — this is the client", cmd)
+}
 
 const usage = `deconflict — advisory intention claims for agents working one repo in parallel
 
@@ -50,14 +66,15 @@ Work tracker
 
 Everything else
   deconflict settings [--json]               what the operator has configured
-  deconflict serve   [--addr :7777] [--db postgres://…]  registry + control panel
-  deconflict genkey                          a key for encrypting organization data
-  deconflict rotate-key [--db postgres://…] [--apply]    validate or rotate encryption key
   deconflict install [--agent claude|codex|all] [--scope project|user] [--dry-run]
                                              hooks + skill, for the agents you run
   deconflict hook    <session-start|pre-tool|user-prompt>
+  deconflict version
 
 Store: $DECONFLICT_STORE (file:/path or http://host:port), default local file.
+
+Running a registry is the deconflict-server binary's job: serve, genkey and
+rotate-key live there, because each of them needs a database credential.
 `
 
 // Run dispatches a subcommand. Returns a process exit code.
@@ -94,7 +111,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "settings":
 		err = cmdSettings(rest, stdout)
 	case "serve":
-		err = cmdServe(rest, stdout)
+		err = movedToServer(cmd)
 	case "hook":
 		err = cmdHook(rest, stdout)
 	case "install":
@@ -111,10 +128,11 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdPlugins(rest, stdout)
 	case "task", "tasks":
 		err = cmdTask(rest, stdout)
-	case "genkey":
-		err = cmdGenkey(rest, stdout)
-	case "rotate-key":
-		err = cmdRotateKey(rest, stdout)
+	case "genkey", "rotate-key":
+		err = movedToServer(cmd)
+	case "version", "--version", "-v":
+		fmt.Fprintf(stdout, "deconflict %s\n", Version)
+		return 0
 	case "help", "-h", "--help":
 		fmt.Fprint(stdout, usage)
 		return 0
@@ -134,7 +152,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func openStore(dsn string) (store.Store, error) { return store.Open(dsn) }
+func openStore(dsn string) (client.Store, error) { return client.Open(dsn) }
 
 // encodeJSON is how every --json flag in this package answers. One indentation,
 // decided once: three copies of this under three names had grown up across the
@@ -210,7 +228,7 @@ func currentPath(dir string) string {
 			return filepath.Join(g, "deconflict-current")
 		}
 	}
-	return filepath.Join(filepath.Dir(store.DefaultPath()), "current")
+	return filepath.Join(filepath.Dir(client.DefaultPath()), "current")
 }
 
 func readCurrent(dir string) string {
@@ -443,7 +461,7 @@ func cmdList(args []string, out io.Writer) error {
 	return nil
 }
 
-func loadOne(st store.Store, id string) (claim.Claim, error) {
+func loadOne(st client.Store, id string) (claim.Claim, error) {
 	evs, err := st.Events()
 	if err != nil {
 		return claim.Claim{}, err

@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/cloudcons/deconflict/internal/gitinfo"
-	"github.com/cloudcons/deconflict/internal/plugin"
-	"github.com/cloudcons/deconflict/internal/store"
+	"github.com/cloudcons/deconflict-cli/internal/gitinfo"
+	"github.com/cloudcons/deconflict-cli/pkg/protocol"
+	"github.com/cloudcons/deconflict-cli/pkg/client"
 )
 
 // Integrations from a terminal. Configuring one is a form-shaped job and stays
@@ -36,12 +36,12 @@ func cmdPlugins(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	token := store.TokenFor(base)
+	token := client.TokenFor(base)
 
 	var state struct {
-		Integrations []plugin.Integration `json:"integrations"`
-		Providers    []plugin.Descriptor  `json:"providers"`
-		Deliveries   []plugin.Delivery    `json:"deliveries"`
+		Integrations []protocol.Integration `json:"integrations"`
+		Providers    []protocol.Descriptor  `json:"providers"`
+		Deliveries   []protocol.Delivery    `json:"deliveries"`
 		KeyPresent   bool                 `json:"key_present"`
 	}
 
@@ -131,7 +131,7 @@ func cmdPlugins(args []string, out io.Writer) error {
 		if id := fs.Arg(0); id != "" {
 			q += "&integration=" + url.QueryEscape(id)
 		}
-		var ds []plugin.Delivery
+		var ds []protocol.Delivery
 		if err := apiJSON(http.MethodGet, base+"/api/plugins/deliveries"+q, token, nil, &ds); err != nil {
 			return err
 		}
@@ -187,7 +187,7 @@ func cmdTask(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	token := store.TokenFor(base)
+	token := client.TokenFor(base)
 	cwd, _ := os.Getwd()
 	repo := gitinfo.Repo(cwd)
 
@@ -197,7 +197,7 @@ func cmdTask(args []string, out io.Writer) error {
 		if ref == "" {
 			return fmt.Errorf("which reference?")
 		}
-		var item plugin.WorkItem
+		var item protocol.WorkItem
 		u := fmt.Sprintf("%s/v1/resolve?ref=%s&repo=%s&force=1", base, url.QueryEscape(ref), url.QueryEscape(repo))
 		if err := apiJSON(http.MethodGet, u, token, nil, &item); err != nil {
 			return err
@@ -219,7 +219,7 @@ func cmdTask(args []string, out io.Writer) error {
 		if q == "" {
 			return fmt.Errorf("search for what?")
 		}
-		var hits []plugin.SearchHit
+		var hits []protocol.SearchHit
 		u := fmt.Sprintf("%s/v1/search?q=%s&repo=%s", base, url.QueryEscape(q), url.QueryEscape(repo))
 		if err := apiJSON(http.MethodGet, u, token, nil, &hits); err != nil {
 			return err
@@ -240,17 +240,6 @@ func cmdTask(args []string, out io.Writer) error {
 		return nil
 	}
 	return fmt.Errorf("unknown task subcommand %q", sub)
-}
-
-// cmdGenkey prints a deployment encryption key. It writes nothing: where the
-// key belongs is a deployment decision — a systemd EnvironmentFile, a secrets
-// manager, Infisical — and a tool that guesses would be wrong most of the time.
-func cmdGenkey(args []string, out io.Writer) error {
-	fmt.Fprintf(out, "DECONFLICT_SECRET_KEY=%s\n", plugin.GenerateKey())
-	fmt.Fprintf(out, "\nOrganization-owned content and integration credentials are encrypted with this.\n")
-	fmt.Fprintf(out, "Losing it makes that data unrecoverable. Store it with this deployment's other\n")
-	fmt.Fprintf(out, "secrets, not in the repository; use `deconflict rotate-key` to replace it.\n")
-	return nil
 }
 
 // ---------- small helpers ----------

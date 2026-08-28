@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudcons/deconflict/internal/gitinfo"
-	"github.com/cloudcons/deconflict/internal/messaging"
+	"github.com/cloudcons/deconflict-cli/internal/gitinfo"
+	"github.com/cloudcons/deconflict-cli/pkg/protocol"
 )
 
 const messageUsage = `deconflict message — interoperable mailbox for autonomous agents
@@ -91,8 +91,8 @@ func messageRegister(args []string, out io.Writer) error {
 		return err
 	}
 	cwd, _ := os.Getwd()
-	in := messaging.RegisterInput{AgentID: *agent, Name: *agent, Runtime: *runtime, Model: *model, InstanceID: *instance, Repository: gitinfo.Repo(cwd), Capabilities: splitList(*capabilities), TTL: *ttl}
-	var r messaging.Registration
+	in := protocol.RegisterInput{AgentID: *agent, Name: *agent, Runtime: *runtime, Model: *model, InstanceID: *instance, Repository: gitinfo.Repo(cwd), Capabilities: splitList(*capabilities), TTL: *ttl}
+	var r protocol.Registration
 	if err = h.JSON(http.MethodPost, "/v1/agents/register", in, &r); err != nil {
 		return err
 	}
@@ -119,8 +119,8 @@ func messageSend(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	in := messaging.SendInput{SenderAgentID: *from, Recipients: splitList(*to), Kind: *kind, NegotiationID: *negotiationID, Payload: map[string]any{"body": *body}, IdempotencyKey: *idempotency, TTL: *ttl}
-	var items []messaging.Message
+	in := protocol.SendInput{SenderAgentID: *from, Recipients: splitList(*to), Kind: *kind, NegotiationID: *negotiationID, Payload: map[string]any{"body": *body}, IdempotencyKey: *idempotency, TTL: *ttl}
+	var items []protocol.Message
 	if err = h.JSON(http.MethodPost, "/v1/messages", in, &items); err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func messageInbox(args []string, out io.Writer) error {
 	if *all {
 		q.Set("all", "1")
 	}
-	var items []messaging.Message
+	var items []protocol.Message
 	if err = h.JSON(http.MethodGet, "/v1/messages?"+q.Encode(), nil, &items); err != nil {
 		return err
 	}
@@ -224,8 +224,8 @@ func messageAck(args []string, out io.Writer) error {
 	if len(ids) == 0 {
 		return fmt.Errorf("delivery id is required")
 	}
-	if len(ids) > messaging.MaxAcknowledgeBatch {
-		return fmt.Errorf("a batch acknowledges at most %d deliveries, got %d", messaging.MaxAcknowledgeBatch, len(ids))
+	if len(ids) > protocol.MaxAcknowledgeBatch {
+		return fmt.Errorf("a batch acknowledges at most %d deliveries, got %d", protocol.MaxAcknowledgeBatch, len(ids))
 	}
 	h, err := negotiationClient(*dsn)
 	if err != nil {
@@ -234,14 +234,14 @@ func messageAck(args []string, out io.Writer) error {
 	// One id keeps the single-delivery response it has always printed; asking
 	// for a batch is what produces a batch.
 	if len(ids) == 1 {
-		var item messaging.Message
+		var item protocol.Message
 		if err = h.JSON(http.MethodPost, "/v1/messages/"+url.PathEscape(ids[0])+"/ack", map[string]string{"agent_id": *agent}, &item); err != nil {
 			return err
 		}
 		return encodeJSON(out, item)
 	}
 	in := map[string]any{"agent_id": *agent, "delivery_ids": ids}
-	var items []messaging.Message
+	var items []protocol.Message
 	if err = h.JSON(http.MethodPost, "/v1/messages/ack", in, &items); err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func messagePresence(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	var items []messaging.Registration
+	var items []protocol.Registration
 	if err = h.JSON(http.MethodGet, "/v1/agents/"+url.PathEscape(id)+"/presence", nil, &items); err != nil {
 		return err
 	}

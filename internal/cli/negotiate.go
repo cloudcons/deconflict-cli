@@ -10,9 +10,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cloudcons/deconflict/internal/gitinfo"
-	"github.com/cloudcons/deconflict/internal/negotiation"
-	"github.com/cloudcons/deconflict/internal/store"
+	"github.com/cloudcons/deconflict-cli/internal/gitinfo"
+	"github.com/cloudcons/deconflict-cli/pkg/protocol"
+	"github.com/cloudcons/deconflict-cli/pkg/client"
 )
 
 const negotiateUsage = `deconflict negotiate — coordination protocol for autonomous agents
@@ -81,12 +81,12 @@ func cmdNegotiate(args []string, out io.Writer) error {
 	}
 }
 
-func negotiationClient(dsn string) (*store.HTTPStore, error) {
+func negotiationClient(dsn string) (*client.HTTPStore, error) {
 	st, err := openStore(dsn)
 	if err != nil {
 		return nil, err
 	}
-	h, ok := st.(*store.HTTPStore)
+	h, ok := st.(*client.HTTPStore)
 	if !ok {
 		return nil, fmt.Errorf("negotiation requires an http(s) registry; got %s", st.Describe())
 	}
@@ -116,8 +116,8 @@ func negotiateRequest(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	in := negotiation.AccessRequest{Repository: gitinfo.Repo(cwd), Agent: negotiation.AgentIdentity{ID: agentID(), Name: agentID(), Runtime: *runtime, Model: *model, Instance: *instance}, Objective: negotiation.Objective{ID: negotiation.NewID("obj_"), Summary: strings.TrimSpace(*objective), SuccessCriteria: splitList(*success), Priority: *priority}, Resources: []negotiation.ResourceRequest{{Paths: splitList(*paths), Access: *access, Scope: strings.TrimSpace(*scope)}}, Lease: negotiation.Lease{Duration: *lease}}
-	var v negotiation.Session
+	in := protocol.AccessRequest{Repository: gitinfo.Repo(cwd), Agent: protocol.AgentIdentity{ID: agentID(), Name: agentID(), Runtime: *runtime, Model: *model, Instance: *instance}, Objective: protocol.Objective{ID: protocol.NewID("obj_"), Summary: strings.TrimSpace(*objective), SuccessCriteria: splitList(*success), Priority: *priority}, Resources: []protocol.ResourceRequest{{Paths: splitList(*paths), Access: *access, Scope: strings.TrimSpace(*scope)}}, Lease: protocol.Lease{Duration: *lease}}
+	var v protocol.Session
 	if err = h.JSON(http.MethodPost, "/v1/negotiations", in, &v); err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func negotiateList(args []string, out io.Writer) error {
 	if len(q) > 0 {
 		path += "?" + q.Encode()
 	}
-	var v []negotiation.Session
+	var v []protocol.Session
 	if err = h.JSON(http.MethodGet, path, nil, &v); err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func negotiateShow(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	var v negotiation.Session
+	var v protocol.Session
 	if err = h.JSON(http.MethodGet, "/v1/negotiations/"+url.PathEscape(id), nil, &v); err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func negotiatePropose(args []string, out io.Writer) error {
 	if id == "" {
 		return fmt.Errorf("negotiation id is required")
 	}
-	var in negotiation.ProposalInput
+	var in protocol.ProposalInput
 	if err := readProtocolFile(*file, &in); err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func negotiateCheckpoint(args []string, out io.Writer) error {
 	if id == "" || *commitment == "" || *checkpoint == "" {
 		return fmt.Errorf("negotiation id, --commitment, and --checkpoint are required")
 	}
-	return protocolMutation(*dsn, id, "checkpoints", negotiation.CheckpointInput{AgentID: *agent, CommitmentID: *commitment, CheckpointID: *checkpoint, Evidence: *evidence}, out)
+	return protocolMutation(*dsn, id, "checkpoints", protocol.CheckpointInput{AgentID: *agent, CommitmentID: *commitment, CheckpointID: *checkpoint, Evidence: *evidence}, out)
 }
 func negotiateRecover(args []string, out io.Writer) error {
 	id, rest := takeID(args)
@@ -247,7 +247,7 @@ func negotiateRecover(args []string, out io.Writer) error {
 	if id == "" || strings.TrimSpace(*reason) == "" {
 		return fmt.Errorf("negotiation id and --reason are required")
 	}
-	return protocolMutation(*dsn, id, "recovery", negotiation.RecoveryInput{AgentID: *agent, Reason: *reason}, out)
+	return protocolMutation(*dsn, id, "recovery", protocol.RecoveryInput{AgentID: *agent, Reason: *reason}, out)
 }
 
 // negotiateDeviate is the way to amend an agreement that is already running.
@@ -267,7 +267,7 @@ func negotiateDeviate(args []string, out io.Writer) error {
 	if id == "" || strings.TrimSpace(*reason) == "" {
 		return fmt.Errorf("negotiation id and --reason are required")
 	}
-	return protocolMutation(*dsn, id, "deviation", negotiation.DeviationInput{AgentID: *agent, CommitmentID: *commitment, Reason: *reason}, out)
+	return protocolMutation(*dsn, id, "deviation", protocol.DeviationInput{AgentID: *agent, CommitmentID: *commitment, Reason: *reason}, out)
 }
 
 // negotiateAsk is for the questions that were never the agents' to settle.
@@ -295,7 +295,7 @@ func negotiateAsk(args []string, out io.Writer) error {
 	if id == "" || strings.TrimSpace(*subject) == "" || strings.TrimSpace(*assume) == "" {
 		return fmt.Errorf("negotiation id, --subject and --assume are required")
 	}
-	return protocolMutation(*dsn, id, "questions", negotiation.QuestionInput{
+	return protocolMutation(*dsn, id, "questions", protocol.QuestionInput{
 		AgentID: *agent, Scope: *scope, Subject: *subject, Body: *body,
 		Assume: *assume, CommitmentID: *commitment,
 	}, out)
@@ -313,7 +313,7 @@ func negotiateAnswer(args []string, out io.Writer) error {
 	if id == "" || *question == "" || strings.TrimSpace(*answer) == "" {
 		return fmt.Errorf("negotiation id, --question and --answer are required")
 	}
-	return protocolMutation(*dsn, id, "answers", negotiation.AnswerInput{QuestionID: *question, Answer: *answer}, out)
+	return protocolMutation(*dsn, id, "answers", protocol.AnswerInput{QuestionID: *question, Answer: *answer}, out)
 }
 
 // negotiateResolve is one agent settling another's question, which is the rung
@@ -331,7 +331,7 @@ func negotiateResolve(args []string, out io.Writer) error {
 	if id == "" || *question == "" || strings.TrimSpace(*answer) == "" {
 		return fmt.Errorf("negotiation id, --question and --answer are required")
 	}
-	return protocolMutation(*dsn, id, "answers", negotiation.AnswerInput{
+	return protocolMutation(*dsn, id, "answers", protocol.AnswerInput{
 		QuestionID: *question, Answer: *answer, AgentID: *agent,
 	}, out)
 }
@@ -353,7 +353,7 @@ func negotiateDefer(args []string, out io.Writer) error {
 	if id == "" || *question == "" || strings.TrimSpace(*reason) == "" {
 		return fmt.Errorf("negotiation id, --question and --reason are required")
 	}
-	return protocolMutation(*dsn, id, "deferrals", negotiation.DeferInput{
+	return protocolMutation(*dsn, id, "deferrals", protocol.DeferInput{
 		QuestionID: *question, AgentID: *agent, Reason: *reason, Needs: *needs, Note: *note,
 	}, out)
 }
@@ -373,7 +373,7 @@ func negotiateExplain(args []string, out io.Writer) error {
 	if id == "" || *question == "" || strings.TrimSpace(*reply) == "" {
 		return fmt.Errorf("negotiation id, --question and --reply are required")
 	}
-	return protocolMutation(*dsn, id, "explanations", negotiation.ExplainInput{
+	return protocolMutation(*dsn, id, "explanations", protocol.ExplainInput{
 		QuestionID: *question, AgentID: *agent, Reply: *reply,
 	}, out)
 }
@@ -390,14 +390,14 @@ func negotiateLease(args []string, out io.Writer) error {
 	if id == "" {
 		return fmt.Errorf("negotiation id is required")
 	}
-	return protocolMutation(*dsn, id, "lease", negotiation.LeaseInput{AgentID: *agent, Duration: *duration}, out)
+	return protocolMutation(*dsn, id, "lease", protocol.LeaseInput{AgentID: *agent, Duration: *duration}, out)
 }
 func protocolMutation(dsn, id, action string, in any, out io.Writer) error {
 	h, err := negotiationClient(dsn)
 	if err != nil {
 		return err
 	}
-	var v negotiation.Session
+	var v protocol.Session
 	if err = h.JSON(http.MethodPost, "/v1/negotiations/"+url.PathEscape(id)+"/"+action, in, &v); err != nil {
 		return err
 	}
@@ -418,7 +418,7 @@ func negotiatePlans(args []string, out io.Writer) error {
 	if *repo != "" {
 		path += "?repo=" + url.QueryEscape(*repo)
 	}
-	var v []negotiation.ExecutionPlan
+	var v []protocol.ExecutionPlan
 	if err = h.JSON(http.MethodGet, path, nil, &v); err != nil {
 		return err
 	}

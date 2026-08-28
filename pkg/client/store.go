@@ -1,10 +1,14 @@
-// Package store persists the append-only claim log.
+// Package client persists and reads the append-only claim log.
 //
 // Two backends, same interface: a local file (one machine, many sessions) and
 // an HTTP client (many machines, one team). Because claims are advisory the
 // store needs no transactions and no locking beyond an atomic append — a lost
 // race produces two overlapping claims, which is a report, not a corruption.
-package store
+//
+// A registry's own Postgres backend is deliberately not here. Reaching the
+// database directly bypasses every permission check the server makes, so it
+// belongs to the server binary rather than to a client anyone can install.
+package client
 
 import (
 	"context"
@@ -14,9 +18,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cloudcons/deconflict/internal/claim"
-	"github.com/cloudcons/deconflict/internal/db"
-	"github.com/cloudcons/deconflict/internal/settings"
+	"github.com/cloudcons/deconflict-cli/pkg/claim"
+	"github.com/cloudcons/deconflict-cli/pkg/settings"
 )
 
 type Store interface {
@@ -62,11 +65,9 @@ func AppendWith(ctx context.Context, st Store, e claim.Event) error {
 //
 //	file:/path/to/claims.jsonl   (or a bare path)
 //	http://host:port             (+ DECONFLICT_TOKEN for a bearer token)
-//	postgres://user@host/db      (direct, for the server and for operators)
 func Open(dsn string) (Store, error) { return OpenCtx(context.Background(), dsn) }
 
-// OpenCtx is Open with a context, which the Postgres backend needs in order to
-// connect and migrate.
+// OpenCtx is Open with a context, for callers that have one to honour.
 func OpenCtx(ctx context.Context, dsn string) (Store, error) {
 	if dsn == "" {
 		dsn = os.Getenv("DECONFLICT_STORE")
@@ -83,21 +84,15 @@ func OpenCtx(ctx context.Context, dsn string) (Store, error) {
 		base := strings.TrimRight(u.String(), "/")
 		return &HTTPStore{Base: base, Token: TokenFor(base)}, nil
 	case strings.HasPrefix(dsn, "postgres://"), strings.HasPrefix(dsn, "postgresql://"):
-		// A direct database connection is the server's path, and an escape
-		// hatch for an operator debugging one. It is not how agents should
-		// reach the registry: a client with the database credentials bypasses
-		// every permission check in the server, so `deconflict claim` against this
-		// DSN records an unattributed claim on purpose.
-		pool, err := db.Open(ctx, dsn)
-		if err != nil {
-			return nil, err
-		}
-		cfg, err := settings.NewPGStore(ctx, pool)
-		if err != nil {
-			pool.Close()
-			return nil, err
-		}
-		return NewPGStore(pool, cfg), nil
+		// Named rather than ignored, because the old behaviour was to connect:
+		// somebody's script still has this DSN in it, and "unknown store" would
+		// send them looking in the wrong place.
+		//
+		// A client holding the database credentials bypasses every permission
+		// check the server makes, and the claims it writes are unattributed. It
+		// was always an operator's escape hatch, so it now lives where the
+		// operators are.
+		return nil, fmt.Errorf("a database DSN is not a client store — reach the registry over HTTP (`deconflict login --server https://…`), or use deconflict-server for direct database access")
 	case strings.HasPrefix(dsn, "file:"):
 		return &FileStore{Path: strings.TrimPrefix(dsn, "file:")}, nil
 	default:

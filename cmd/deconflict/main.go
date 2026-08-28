@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"github.com/cloudcons/deconflict/internal/cli"
+	"github.com/cloudcons/deconflict-cli/internal/cli"
 )
 
 func main() {

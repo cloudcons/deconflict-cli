@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cloudcons/deconflict/internal/claim"
-	"github.com/cloudcons/deconflict/internal/gitinfo"
-	"github.com/cloudcons/deconflict/internal/messaging"
+	"github.com/cloudcons/deconflict-cli/pkg/claim"
+	"github.com/cloudcons/deconflict-cli/internal/gitinfo"
+	"github.com/cloudcons/deconflict-cli/pkg/protocol"
 )
 
 // Claude Code hook plumbing.
@@ -107,7 +107,7 @@ func mailboxContext(dsn, cwd string, in hookInput) string {
 	if instance == "" {
 		instance = defaultInstance()
 	}
-	registration := messaging.RegisterInput{
+	registration := protocol.RegisterInput{
 		AgentID:      agentID(),
 		Name:         agentID(),
 		Runtime:      runtimeName(),
@@ -116,11 +116,11 @@ func mailboxContext(dsn, cwd string, in hookInput) string {
 		Capabilities: []string{"messaging", "negotiation", "checkpoints"},
 		TTL:          "5m",
 	}
-	var registered messaging.Registration
+	var registered protocol.Registration
 	if err := h.JSON("POST", "/v1/agents/register", registration, &registered); err != nil {
 		return ""
 	}
-	var messages []messaging.Message
+	var messages []protocol.Message
 	path := "/v1/messages?agent_id=" + url.QueryEscape(registration.AgentID)
 	if err := h.JSON("GET", path, nil, &messages); err != nil || len(messages) == 0 {
 		return ""

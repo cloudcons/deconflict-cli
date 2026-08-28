@@ -11,9 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cloudcons/deconflict/internal/gitinfo"
-	"github.com/cloudcons/deconflict/internal/messaging"
-	"github.com/cloudcons/deconflict/internal/negotiation"
+	"github.com/cloudcons/deconflict-cli/internal/gitinfo"
+	"github.com/cloudcons/deconflict-cli/pkg/protocol"
 )
 
 type mcpRequest struct {
@@ -95,7 +94,7 @@ func mcpTools() []mcpTool {
 		{Name: "send_message", Description: "Send a durable typed message to one or more autonomous agents. Use negotiation event kinds when the message advances an agreement.", InputSchema: objectSchema([]string{"sender_agent_id", "recipients", "kind", "body"}, map[string]any{"sender_agent_id": str("Registered sender agent"), "recipients": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "kind": str("Typed event, for example proposal.submitted"), "body": str("Human-readable message"), "negotiation_id": str("Related negotiation"), "idempotency_key": str("Stable retry key"), "ttl": str("Delivery lifetime")})},
 		{Name: "receive_messages", Description: "Receive pending durable messages for this registered agent. Retain the sequence as the next cursor and acknowledge each processed delivery.", InputSchema: objectSchema([]string{"agent_id"}, map[string]any{"agent_id": str("Registered recipient agent"), "after": map[string]any{"type": "integer", "minimum": 0}, "include_acknowledged": map[string]any{"type": "boolean"}})},
 		{Name: "acknowledge_message", Description: "Acknowledge that a delivered message was received and processed. This does not accept a negotiation proposal.", InputSchema: objectSchema([]string{"agent_id", "delivery_id"}, map[string]any{"agent_id": str("Registered recipient agent"), "delivery_id": str("Delivery id returned by receive_messages")})},
-		{Name: "acknowledge_messages", Description: "Acknowledge a batch of delivered messages in one call, once they have all been processed. Refused whole if any delivery id is unknown. This does not accept a negotiation proposal.", InputSchema: objectSchema([]string{"agent_id", "delivery_ids"}, map[string]any{"agent_id": str("Registered recipient agent"), "delivery_ids": map[string]any{"type": "array", "description": "Delivery ids returned by receive_messages", "items": map[string]string{"type": "string"}, "minItems": 1, "maxItems": messaging.MaxAcknowledgeBatch}})},
+		{Name: "acknowledge_messages", Description: "Acknowledge a batch of delivered messages in one call, once they have all been processed. Refused whole if any delivery id is unknown. This does not accept a negotiation proposal.", InputSchema: objectSchema([]string{"agent_id", "delivery_ids"}, map[string]any{"agent_id": str("Registered recipient agent"), "delivery_ids": map[string]any{"type": "array", "description": "Delivery ids returned by receive_messages", "items": map[string]string{"type": "string"}, "minItems": 1, "maxItems": protocol.MaxAcknowledgeBatch}})},
 		{Name: "get_negotiation", Description: "Inspect the complete agreement state referenced by a delivered message before responding.", InputSchema: objectSchema([]string{"negotiation_id"}, map[string]any{"negotiation_id": str("Negotiation identifier")})},
 		{Name: "submit_proposal", Description: "Submit a proposal or counterproposal. The proposal must contain agent_id, rationale, commitments, dependencies, and recovery terms from the negotiation protocol.", InputSchema: objectSchema([]string{"negotiation_id", "proposal"}, map[string]any{"negotiation_id": str("Negotiation identifier"), "proposal": map[string]any{"type": "object", "description": "Negotiation ProposalInput document"}})},
 		{Name: "accept_proposal", Description: "Accept the current proposal for a participating autonomous agent. Delivery acknowledgement alone never performs this action.", InputSchema: objectSchema([]string{"negotiation_id", "agent_id"}, map[string]any{"negotiation_id": str("Negotiation identifier"), "agent_id": str("Participating agent identity")})},
@@ -131,8 +130,8 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 			cwd, _ := os.Getwd()
 			repo = gitinfo.Repo(cwd)
 		}
-		input := messaging.RegisterInput{AgentID: stringArg("agent_id"), Runtime: stringArg("runtime"), InstanceID: stringArg("instance_id"), Model: stringArg("model"), Repository: repo, Capabilities: caps, TTL: stringArg("ttl")}
-		var result messaging.Registration
+		input := protocol.RegisterInput{AgentID: stringArg("agent_id"), Runtime: stringArg("runtime"), InstanceID: stringArg("instance_id"), Model: stringArg("model"), Repository: repo, Capabilities: caps, TTL: stringArg("ttl")}
+		var result protocol.Registration
 		err = h.JSON(http.MethodPost, "/v1/agents/register", input, &result)
 		value = result
 	case "send_message":
@@ -144,8 +143,8 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 				}
 			}
 		}
-		input := messaging.SendInput{SenderAgentID: stringArg("sender_agent_id"), Recipients: recipients, Kind: stringArg("kind"), NegotiationID: stringArg("negotiation_id"), IdempotencyKey: stringArg("idempotency_key"), TTL: stringArg("ttl"), Payload: map[string]any{"body": stringArg("body")}}
-		var result []messaging.Message
+		input := protocol.SendInput{SenderAgentID: stringArg("sender_agent_id"), Recipients: recipients, Kind: stringArg("kind"), NegotiationID: stringArg("negotiation_id"), IdempotencyKey: stringArg("idempotency_key"), TTL: stringArg("ttl"), Payload: map[string]any{"body": stringArg("body")}}
+		var result []protocol.Message
 		err = h.JSON(http.MethodPost, "/v1/messages", input, &result)
 		value = result
 	case "receive_messages":
@@ -157,11 +156,11 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 		if all, _ := call.Arguments["include_acknowledged"].(bool); all {
 			q.Set("all", "1")
 		}
-		var result []messaging.Message
+		var result []protocol.Message
 		err = h.JSON(http.MethodGet, "/v1/messages?"+q.Encode(), nil, &result)
 		value = result
 	case "acknowledge_message":
-		var result messaging.Message
+		var result protocol.Message
 		err = h.JSON(http.MethodPost, "/v1/messages/"+url.PathEscape(stringArg("delivery_id"))+"/ack", map[string]string{"agent_id": stringArg("agent_id")}, &result)
 		value = result
 	case "acknowledge_messages":
@@ -177,11 +176,11 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 			return nil, fmt.Errorf("delivery_ids is required")
 		}
 		input := map[string]any{"agent_id": stringArg("agent_id"), "delivery_ids": deliveryIDs}
-		var result []messaging.Message
+		var result []protocol.Message
 		err = h.JSON(http.MethodPost, "/v1/messages/ack", input, &result)
 		value = result
 	case "get_negotiation":
-		var result negotiation.Session
+		var result protocol.Session
 		err = h.JSON(http.MethodGet, "/v1/negotiations/"+url.PathEscape(stringArg("negotiation_id")), nil, &result)
 		value = result
 	case "submit_proposal":
@@ -193,15 +192,15 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 		if marshalErr != nil {
 			return nil, marshalErr
 		}
-		var input negotiation.ProposalInput
+		var input protocol.ProposalInput
 		if decodeErr := json.Unmarshal(body, &input); decodeErr != nil {
 			return nil, decodeErr
 		}
-		var result negotiation.Session
+		var result protocol.Session
 		err = h.JSON(http.MethodPost, "/v1/negotiations/"+url.PathEscape(stringArg("negotiation_id"))+"/proposals", input, &result)
 		value = result
 	case "accept_proposal":
-		var result negotiation.Session
+		var result protocol.Session
 		err = h.JSON(http.MethodPost, "/v1/negotiations/"+url.PathEscape(stringArg("negotiation_id"))+"/accept", map[string]string{"agent_id": stringArg("agent_id")}, &result)
 		value = result
 	default:

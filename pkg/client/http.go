@@ -1,4 +1,4 @@
-package store
+package client
 
 import (
 	"bytes"
@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cloudcons/deconflict/internal/claim"
-	"github.com/cloudcons/deconflict/internal/settings"
+	"github.com/cloudcons/deconflict-cli/pkg/claim"
+	"github.com/cloudcons/deconflict-cli/pkg/settings"
 )
 
 // HTTPStore talks to `deconflict serve` — the shared-registry backend for a team.
