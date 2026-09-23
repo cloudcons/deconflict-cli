@@ -233,8 +233,13 @@ Several agents commit to this repository in parallel. **Claim the area you are
 about to edit before you edit it**, and read what comes back:
 
 ` + "```console" + `
-$ deconflict claim --paths '<globs>' --what '<what>' --why '<why>' --not '<globs you will not touch>'
+$ deconflict claim --paths '<globs>' --what '<what>' --why '<why>' --not '<globs you will not touch>' \
+    --uses '<globs you depend on but will not edit>'
 ` + "```" + `
+
+` + "`--uses`" + ` is what you stand on without editing — code you call, a schema you
+read, a pipeline you run (` + "`'<repo>:<glob>'`" + ` for another repository). It is the
+only way an agent changing that code hears about you.
 
 Claims are advisory — nothing is blocked or locked. An overlap is a
 conversation to have now rather than a merge conflict to have later. Release
