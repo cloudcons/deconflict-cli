@@ -207,13 +207,16 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 		err = h.JSON(http.MethodGet, "/v1/resources", nil, &result)
 		value = result
 	case "lock_resource":
+		if stringArg("resource") == "" || stringArg("agent_id") == "" {
+			return nil, fmt.Errorf("resource and agent_id are required")
+		}
 		input := protocol.LockInput{AgentID: stringArg("agent_id"), Mode: protocol.LockMode(stringArg("mode")), Reason: stringArg("reason"), TTL: stringArg("ttl")}
 		var result protocol.LockResult
 		err = h.JSON(http.MethodPost, resourcePath(stringArg("resource"), "/locks"), input, &result)
 		value = result
 	case "unlock_resource":
-		if stringArg("agent_id") == "" {
-			return nil, fmt.Errorf("agent_id is required")
+		if stringArg("resource") == "" || stringArg("agent_id") == "" {
+			return nil, fmt.Errorf("resource and agent_id are required")
 		}
 		input := protocol.UnlockInput{AgentID: stringArg("agent_id"), Reason: stringArg("reason")}
 		var result []protocol.ResourceLock
