@@ -45,6 +45,12 @@ Claiming
   deconflict status                          my claim, with git-derived progress
   deconflict reconcile [--apply]             close claims whose branch is merged
 
+Shared resources (environments, databases, deploy slots)
+  deconflict lock     <resource> [--shared] [--reason …] [--ttl 1h]
+                                             advisory lock; exit 3 if someone else holds it
+  deconflict unlock   <resource> [--all]
+  deconflict resource <list|add|remove|release|renew>
+
 Agent coordination
   deconflict negotiate request --paths <glob,...> --objective <text>
   deconflict negotiate <list|show|propose|accept|checkpoint|recover|complete|plans>
@@ -102,6 +108,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdStatus(rest, stdout)
 	case "reconcile":
 		err = cmdReconcile(rest, stdout)
+	case "resource", "resources":
+		err = cmdResource(rest, stdout)
+	case "lock":
+		err = cmdLock(rest, stdout)
+	case "unlock":
+		err = cmdUnlock(rest, stdout)
 	case "negotiate", "coordination":
 		err = cmdNegotiate(rest, stdout)
 	case "message", "messages", "agent":

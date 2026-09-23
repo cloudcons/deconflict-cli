@@ -61,6 +61,16 @@ func cmdHook(args []string, out io.Writer) error {
 	switch kind {
 	case "session-start", "user-prompt":
 		text = sessionContext(*dsn, cwd)
+		// Held resources are told once, at the start. Repeating them on every
+		// prompt would spend context on the same lines until they were skimmed.
+		if kind == "session-start" {
+			if held := resourceContext(*dsn); held != "" {
+				if text != "" {
+					text += "\n"
+				}
+				text += held
+			}
+		}
 	case "pre-tool":
 		text = preToolContext(*dsn, cwd, in)
 	default:

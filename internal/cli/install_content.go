@@ -176,6 +176,33 @@ scope creep to drop.
 Claims expire, so a long task needs ` + "`deconflict renew`" + `. An expired claim is
 not a held one — it stops warning anybody.
 
+## Shared environments and databases
+
+Some things agents contend for are not files: staging, a shared database, a
+deploy slot. Before you deploy to one, migrate it, reset its fixtures, or run
+anything that assumes nobody else is using it, lock it:
+
+` + "```console" + `
+$ deconflict lock staging --reason 'deploying #88 to verify the migration'
+$ deconflict lock orders-db --shared --reason 'integration tests'
+` + "```" + `
+
+` + "`--shared`" + ` is for using it alongside others; the default is exclusive.
+A lock is advisory like a claim: it is always granted, and exit 3 means
+somebody else holds it — the output names them and what they are doing. Do not
+proceed over an exclusive holder without coordinating with that agent first.
+
+Release it the moment you are done, not when the task ends:
+
+` + "```console" + `
+$ deconflict unlock staging
+` + "```" + `
+
+` + "`deconflict resource list`" + ` shows every resource and its holders. A name the
+registry does not know is refused with the list of names it does; add a missing
+one with ` + "`deconflict resource add <name> --kind env`" + ` rather than locking a
+near-miss.
+
 ## When the work lands
 
 ` + "```console" + `
@@ -199,6 +226,10 @@ $ deconflict claim --paths '<globs>' --what '<what>' --why '<why>' --not '<globs
 Claims are advisory — nothing is blocked or locked. An overlap is a
 conversation to have now rather than a merge conflict to have later. Release
 with ` + "`deconflict release --reason merged`" + ` when the work lands.
+
+Before deploying to or migrating a shared environment or database, take an
+advisory lock with ` + "`deconflict lock <name> --reason '<why>'`" + ` and release
+it with ` + "`deconflict unlock <name>`" + ` as soon as you are done.
 
 The full workflow, including what to do when an overlap is reported, is in the
 ` + "`deconflict`" + ` skill.

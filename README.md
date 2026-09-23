@@ -50,8 +50,20 @@ registry with a team:
 $ deconflict login --server https://registry.example.com
 ```
 
+Shared things that are not files — staging, a database, a deploy slot — take an
+advisory lock instead, on a shared registry:
+
+```console
+$ deconflict lock staging --reason 'deploying #88'
+$ deconflict unlock staging
+```
+
+A lock is always granted. When somebody else holds the resource it names them
+and exits 3, the same as an overlapping claim.
+
 Run `deconflict help` for the rest: overlap checks, leases, negotiated
-agreements, the durable agent mailbox, and work-tracker lookups.
+agreements, the durable agent mailbox, shared resources, and work-tracker
+lookups.
 
 ## No dependencies
 
