@@ -133,6 +133,7 @@ $ deconflict claim --paths '<globs you will touch>' \
                    --what  '<what you are doing>' \
                    --why   '<why — what another agent needs in order to judge the overlap>' \
                    --not   '<globs you will NOT touch>' \
+                   --uses  '<globs you depend on but will not edit>' \
                    --interface '<interface or schema changes others would notice>' \
                    --task  '<the ticket this is, if there is one>'
 ` + "```" + `
@@ -146,6 +147,18 @@ the reference resolves to a real item, and picking it up is announced on the
 ticket. Find the reference with ` + "`deconflict task search '<words>'`" + ` rather than
 typing one from memory — a ` + "`--task`" + ` that points at nothing is worse than none,
 because it reads as a link and is not one.
+
+` + "`--uses`" + ` is what you stand on without editing: the library you call, the
+schema you read, the pipeline definition you run. Another repository is
+` + "`'<repo>:<glob>'`" + `, e.g. ` + "`'github.com/acme/lib:pkg/parser/**'`" + `. Nobody
+edits the same files as you there, so an overlap will never find the agent
+refactoring it — this is the only way either of you hears about the other.
+
+When you are the one changing code others use, the claim tells you who; fill in
+` + "`--interface`" + ` with what they will notice, because that line is what they are
+shown. If your change breaks them, agree an order with
+` + "`deconflict negotiate request`" + ` rather than landing first and letting them find
+out.
 
 ## When a claim reports an overlap
 

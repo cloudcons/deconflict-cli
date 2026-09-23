@@ -50,6 +50,15 @@ registry with a team:
 $ deconflict login --server https://registry.example.com
 ```
 
+Say what you depend on but will not edit, and whoever changes it hears about
+you — the refactor that would break a caller who never touched the refactored
+file:
+
+```console
+$ deconflict claim --paths 'app/checkout' --uses 'lib/parser,github.com/acme/lib:pkg/**' \
+    --what 'wire the parser into checkout'
+```
+
 Shared things that are not files — staging, a database, a deploy slot — take an
 advisory lock instead, on a shared registry:
 

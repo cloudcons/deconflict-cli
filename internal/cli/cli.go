@@ -36,7 +36,7 @@ func movedToServer(cmd string) error {
 const usage = `deconflict — advisory intention claims for agents working one repo in parallel
 
 Claiming
-  deconflict claim   --paths <glob,...> --what <text> [--why ...] [--not ...] [--task <ref>]
+  deconflict claim   --paths <glob,...> --what <text> [--why ...] [--not ...] [--uses <glob,...>] [--task <ref>]
   deconflict check   [--paths <glob,...>] [--file <path>]   what overlaps this area
   deconflict list    [--all] [--repo <id>] [--json]
   deconflict release [id] [--reason merged|abandoned|superseded] [--pr <url>]
@@ -261,6 +261,7 @@ func cmdClaim(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("claim", flag.ContinueOnError)
 	paths := fs.String("paths", "", "comma-separated globs this task will touch (required)")
 	not := fs.String("not", "", "comma-separated globs this task will NOT touch")
+	uses := fs.String("uses", "", "comma-separated globs this task depends on without editing (\"<repo>:<glob>\" for another repo)")
 	what := fs.String("what", "", "what you are doing (required)")
 	why := fs.String("why", "", "why — the reason another agent needs to judge overlap")
 	iface := fs.String("interface", "", "expected interface/schema changes others would notice")
@@ -305,6 +306,7 @@ func cmdClaim(args []string, out io.Writer) error {
 		HeadSHA:   gitinfo.HeadSHA(cwd),
 		Paths:     claim.NormalizeAll(splitList(*paths)),
 		NotPaths:  claim.NormalizeAll(splitList(*not)),
+		Uses:      claim.NormalizeUses(splitList(*uses)),
 		What:      strings.TrimSpace(*what),
 		Why:       strings.TrimSpace(*why),
 		Interface: strings.TrimSpace(*iface),
@@ -318,8 +320,12 @@ func cmdClaim(args []string, out io.Writer) error {
 	// Look before writing, but write regardless: the claim is an
 	// announcement, and an overlap is a thing both sides should see.
 	var conflicts []claim.Conflict
+	var dependencies, dependents []claim.Dependency
 	if evs, err := st.Events(); err == nil {
-		conflicts = claim.FindOverlaps(claim.Fold(evs), c.Repo, c.Paths, now, nil, cfg.IgnorePaths)
+		all := claim.Fold(evs)
+		conflicts = claim.FindOverlaps(all, c.Repo, c.Paths, now, nil, cfg.IgnorePaths)
+		dependencies = claim.DependenciesOf(all, c, now)
+		dependents = claim.DependentsOf(all, c, now)
 	} else {
 		fmt.Fprintf(out, "warning: could not read registry (%v) — claiming anyway\n", err)
 	}
@@ -334,15 +340,24 @@ func cmdClaim(args []string, out io.Writer) error {
 	writeCurrent(cwd, c.ID)
 
 	if *asJSON {
-		return encodeJSON(out, map[string]any{"claim": c, "conflicts": conflicts})
+		return encodeJSON(out, map[string]any{"claim": c, "conflicts": conflicts, "dependencies": dependencies, "dependents": dependents})
 	}
 	fmt.Fprintf(out, "claimed %s  %s  (lease %s)\n", c.ID, strings.Join(c.Paths, ", "), *ttl)
-	if len(conflicts) == 0 {
+	if len(c.Uses) > 0 {
+		fmt.Fprintf(out, "  uses %s\n", strings.Join(c.Uses, ", "))
+	}
+	if len(conflicts) == 0 && len(dependencies) == 0 && len(dependents) == 0 {
 		fmt.Fprintln(out, "no overlapping claims.")
 		return nil
 	}
-	fmt.Fprintln(out)
-	fmt.Fprint(out, claim.Render(conflicts, now))
+	if len(conflicts) > 0 {
+		fmt.Fprintln(out)
+		fmt.Fprint(out, claim.Render(conflicts, now))
+	}
+	if deps := claim.RenderDependencies(dependencies, dependents, now); deps != "" {
+		fmt.Fprintln(out)
+		fmt.Fprint(out, deps)
+	}
 	if !*force {
 		// Exit 3 = claimed, but overlapping. A wrapper or CI step can key on
 		// it; a human can ignore it. Nothing is blocked either way.
@@ -398,17 +413,37 @@ func cmdCheck(args []string, out io.Writer) error {
 	if id := readCurrent(cwd); id != "" {
 		mine[id] = true
 	}
-	conflicts := claim.FindOverlaps(claim.Fold(evs), gitinfo.Repo(cwd), claim.NormalizeAll(list), now, mine, st.Settings().IgnorePaths)
+	all := claim.Fold(evs)
+	conflicts := claim.FindOverlaps(all, gitinfo.Repo(cwd), claim.NormalizeAll(list), now, mine, st.Settings().IgnorePaths)
+	// Who would be broken by changing these paths, even though none of them
+	// edits here. The probe stands in for a claim on exactly these paths.
+	probe := claim.Claim{Repo: gitinfo.Repo(cwd), Agent: agentID(), Paths: claim.NormalizeAll(list)}
+	var dependents []claim.Dependency
+	for _, d := range claim.DependentsOf(all, probe, now) {
+		if !mine[d.User.ID] {
+			dependents = append(dependents, d)
+		}
+	}
 	if *asJSON {
+		// The bare list of overlaps is a shape callers already parse, so
+		// dependents are not added to it; they are in the text output.
 		return encodeJSON(out, conflicts)
 	}
-	if len(conflicts) == 0 {
+	if len(conflicts) == 0 && len(dependents) == 0 {
 		if !*quiet {
 			fmt.Fprintln(out, "no overlapping claims.")
 		}
 		return nil
 	}
-	fmt.Fprint(out, claim.Render(conflicts, now))
+	if len(conflicts) > 0 {
+		fmt.Fprint(out, claim.Render(conflicts, now))
+	}
+	if deps := claim.RenderDependencies(nil, dependents, now); deps != "" {
+		if len(conflicts) > 0 {
+			fmt.Fprintln(out)
+		}
+		fmt.Fprint(out, deps)
+	}
 	return exitCode{3}
 }
 
@@ -569,6 +604,7 @@ func cmdAmend(args []string, out io.Writer) error {
 	what := fs.String("what", "", "restate what the work is")
 	why := fs.String("why", "", "restate why")
 	iface := fs.String("interface", "", "restate the interface changes")
+	uses := fs.String("uses", "", "replace what this work depends on without editing")
 	dsn := fs.String("store", "", "store DSN")
 	id, args := takeID(args)
 	if err := fs.Parse(args); err != nil {
@@ -579,8 +615,8 @@ func cmdAmend(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if *paths == "" && *not == "" && *what == "" && *why == "" && *iface == "" {
-		return fmt.Errorf("nothing to amend: pass at least one of --paths, --not, --what, --why or --interface")
+	if *paths == "" && *not == "" && *what == "" && *why == "" && *iface == "" && *uses == "" {
+		return fmt.Errorf("nothing to amend: pass at least one of --paths, --not, --uses, --what, --why or --interface")
 	}
 	st, err := openStore(*dsn)
 	if err != nil {
@@ -609,6 +645,9 @@ func cmdAmend(args []string, out io.Writer) error {
 	if *iface != "" {
 		c.Interface = strings.TrimSpace(*iface)
 	}
+	if *uses != "" {
+		c.Uses = claim.NormalizeUses(splitList(*uses))
+	}
 	if err := st.Append(claim.Event{Op: "amend", TS: time.Now().UTC(), Claim: c}); err != nil {
 		return err
 	}
@@ -619,10 +658,15 @@ func cmdAmend(args []string, out io.Writer) error {
 	// An amendment can create an overlap that did not exist when the claim was
 	// first made, and that is exactly the thing worth saying out loud.
 	if evs, err := st.Events(); err == nil {
-		conflicts := claim.FindOverlaps(claim.Fold(evs), c.Repo, c.Paths, time.Now().UTC(),
+		all := claim.Fold(evs)
+		conflicts := claim.FindOverlaps(all, c.Repo, c.Paths, time.Now().UTC(),
 			map[string]bool{c.ID: true}, st.Settings().IgnorePaths)
 		if len(conflicts) > 0 {
 			fmt.Fprintf(out, "\n%s", claim.Render(conflicts, time.Now().UTC()))
+		}
+		now := time.Now().UTC()
+		if deps := claim.RenderDependencies(claim.DependenciesOf(all, c, now), claim.DependentsOf(all, c, now), now); deps != "" {
+			fmt.Fprintf(out, "\n%s", deps)
 		}
 	}
 	return nil

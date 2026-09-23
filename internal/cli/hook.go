@@ -64,6 +64,12 @@ func cmdHook(args []string, out io.Writer) error {
 		// Held resources are told once, at the start. Repeating them on every
 		// prompt would spend context on the same lines until they were skimmed.
 		if kind == "session-start" {
+			if deps := dependencyContext(*dsn, cwd); deps != "" {
+				if text != "" {
+					text += "\n"
+				}
+				text += deps
+			}
 			if held := resourceContext(*dsn); held != "" {
 				if text != "" {
 					text += "\n"
@@ -386,4 +392,32 @@ func markSeen(session, key string) bool {
 	defer fh.Close()
 	fmt.Fprintln(fh, key)
 	return true
+}
+
+// dependencyContext is the other half of what a session needs before it plans:
+// not who is editing beside it, which sessionContext says, but who is changing
+// the ground its own claim stands on, and who stands on the ground it is
+// changing. Only for the claim this worktree recorded, and only at session
+// start — a dependency does not change between prompts.
+func dependencyContext(dsn, cwd string) string {
+	id := readCurrent(cwd)
+	if id == "" {
+		return ""
+	}
+	st, err := openStore(dsn)
+	if err != nil {
+		return ""
+	}
+	evs, err := st.Events()
+	if err != nil {
+		return ""
+	}
+	now := time.Now().UTC()
+	all := claim.Fold(evs)
+	for _, c := range all {
+		if c.ID == id && c.Active(now) {
+			return claim.RenderDependencies(claim.DependenciesOf(all, c, now), claim.DependentsOf(all, c, now), now)
+		}
+	}
+	return ""
 }
