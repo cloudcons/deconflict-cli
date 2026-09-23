@@ -48,6 +48,14 @@ type Claim struct {
 	Paths    []string `json:"paths"`
 	NotPaths []string `json:"not_paths,omitempty"`
 
+	// Uses is what this work depends on without editing: code it calls, a
+	// schema it reads, a pipeline definition it runs. Globs, repo-relative, or
+	// "<repo>:<glob>" for another repository. Overlap is about two agents
+	// editing the same ground; Uses is about one agent editing ground another
+	// is standing on, which no path overlap can see — the refactor that breaks
+	// a caller who never touched the refactored file.
+	Uses []string `json:"uses,omitempty"`
+
 	What      string `json:"what"`
 	Why       string `json:"why,omitempty"`
 	Interface string `json:"interface,omitempty"`
@@ -163,6 +171,11 @@ func Fold(events []Event) []Claim {
 				}
 				if e.Claim.Interface != "" {
 					cur.Interface = e.Claim.Interface
+				}
+				// Only when sent: an amendment from a client older than the
+				// field carries no Uses, and must not erase them.
+				if e.Claim.Uses != nil {
+					cur.Uses = e.Claim.Uses
 				}
 				byID[e.Claim.ID] = cur
 			}
