@@ -97,6 +97,9 @@ func mcpTools() []mcpTool {
 		{Name: "acknowledge_messages", Description: "Acknowledge a batch of delivered messages in one call, once they have all been processed. Refused whole if any delivery id is unknown. This does not accept a negotiation proposal.", InputSchema: objectSchema([]string{"agent_id", "delivery_ids"}, map[string]any{"agent_id": str("Registered recipient agent"), "delivery_ids": map[string]any{"type": "array", "description": "Delivery ids returned by receive_messages", "items": map[string]string{"type": "string"}, "minItems": 1, "maxItems": protocol.MaxAcknowledgeBatch}})},
 		{Name: "get_negotiation", Description: "Inspect the complete agreement state referenced by a delivered message before responding.", InputSchema: objectSchema([]string{"negotiation_id"}, map[string]any{"negotiation_id": str("Negotiation identifier")})},
 		{Name: "submit_proposal", Description: "Submit a proposal or counterproposal. The proposal must contain agent_id, rationale, commitments, dependencies, and recovery terms from the negotiation protocol.", InputSchema: objectSchema([]string{"negotiation_id", "proposal"}, map[string]any{"negotiation_id": str("Negotiation identifier"), "proposal": map[string]any{"type": "object", "description": "Negotiation ProposalInput document"}})},
+		{Name: "list_resources", Description: "List the organization's shared resources (environments, databases, deploy slots) and the advisory locks currently held on each.", InputSchema: objectSchema([]string{}, map[string]any{})},
+		{Name: "lock_resource", Description: "Take an advisory lock on a shared resource before deploying to it, migrating it, or otherwise depending on it. Never refused because someone else holds it: the result lists every contending holder, and a non-empty conflicts list means coordinate before acting.", InputSchema: objectSchema([]string{"resource", "agent_id"}, map[string]any{"resource": str("Resource name, e.g. staging"), "agent_id": str("Agent taking the lock"), "mode": map[string]any{"type": "string", "enum": []string{"exclusive", "shared"}, "description": "exclusive (default) to need it alone; shared to use it alongside others"}, "reason": str("What you are doing with it, shown to contending agents"), "ttl": str("Lease, for example 45m")})},
+		{Name: "unlock_resource", Description: "Release this agent's advisory locks on a shared resource once done with it.", InputSchema: objectSchema([]string{"resource", "agent_id"}, map[string]any{"resource": str("Resource name"), "agent_id": str("Agent whose locks to release"), "reason": str("Why, for the record")})},
 		{Name: "accept_proposal", Description: "Accept the current proposal for a participating autonomous agent. Delivery acknowledgement alone never performs this action.", InputSchema: objectSchema([]string{"negotiation_id", "agent_id"}, map[string]any{"negotiation_id": str("Negotiation identifier"), "agent_id": str("Participating agent identity")})},
 	}
 }
@@ -198,6 +201,26 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 		}
 		var result protocol.Session
 		err = h.JSON(http.MethodPost, "/v1/negotiations/"+url.PathEscape(stringArg("negotiation_id"))+"/proposals", input, &result)
+		value = result
+	case "list_resources":
+		var result []protocol.Resource
+		err = h.JSON(http.MethodGet, "/v1/resources", nil, &result)
+		value = result
+	case "lock_resource":
+		if stringArg("resource") == "" || stringArg("agent_id") == "" {
+			return nil, fmt.Errorf("resource and agent_id are required")
+		}
+		input := protocol.LockInput{AgentID: stringArg("agent_id"), Mode: protocol.LockMode(stringArg("mode")), Reason: stringArg("reason"), TTL: stringArg("ttl")}
+		var result protocol.LockResult
+		err = h.JSON(http.MethodPost, resourcePath(stringArg("resource"), "/locks"), input, &result)
+		value = result
+	case "unlock_resource":
+		if stringArg("resource") == "" || stringArg("agent_id") == "" {
+			return nil, fmt.Errorf("resource and agent_id are required")
+		}
+		input := protocol.UnlockInput{AgentID: stringArg("agent_id"), Reason: stringArg("reason")}
+		var result []protocol.ResourceLock
+		err = h.JSON(http.MethodPost, resourcePath(stringArg("resource"), "/unlock"), input, &result)
 		value = result
 	case "accept_proposal":
 		var result protocol.Session

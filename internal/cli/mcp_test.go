@@ -27,7 +27,7 @@ func TestMCPAdvertisesInteroperableMailboxTools(t *testing.T) {
 	for _, item := range tools {
 		names[item.(map[string]any)["name"].(string)] = true
 	}
-	for _, want := range []string{"register_agent", "send_message", "receive_messages", "acknowledge_message", "acknowledge_messages", "get_negotiation", "submit_proposal", "accept_proposal"} {
+	for _, want := range []string{"register_agent", "send_message", "receive_messages", "acknowledge_message", "acknowledge_messages", "get_negotiation", "submit_proposal", "accept_proposal", "list_resources", "lock_resource", "unlock_resource"} {
 		if !names[want] {
 			t.Errorf("missing %s", want)
 		}
