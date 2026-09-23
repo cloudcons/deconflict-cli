@@ -1,0 +1,48 @@
+name: release
+
+# A v* tag becomes a GitHub release with one archive per platform and a
+# checksum file. Machines that install this through configuration management
+# pin a version and verify a checksum; `go install` needs a Go toolchain on a
+# box that otherwise has no reason to carry one.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            goos="${target%/*}" goarch="${target#*/}"
+            name="deconflict_${version}_${goos}_${goarch}"
+            bin=deconflict; [ "$goos" = windows ] && bin=deconflict.exe
+            mkdir -p "build/$name"
+            GOOS="$goos" GOARCH="$goarch" go build -trimpath \
+              -ldflags "-s -w -X github.com/cloudcons/deconflict-cli/internal/cli.Version=${version}" \
+              -o "build/$name/$bin" ./cmd/deconflict
+            if [ "$goos" = windows ]; then
+              (cd "build/$name" && zip -q "../../dist/$name.zip" "$bin")
+            else
+              tar -C "build/$name" -czf "dist/$name.tar.gz" "$bin"
+            fi
+          done
+          (cd dist && sha256sum * > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
