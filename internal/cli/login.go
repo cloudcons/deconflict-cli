@@ -31,6 +31,7 @@ func cmdLogin(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	serverURL := fs.String("server", "", "registry URL (default: $DECONFLICT_STORE)")
 	timeout := fs.Duration("timeout", 5*time.Minute, "how long to wait for approval")
+	org := fs.String("org", "", "organization (slug) the token should act in; preselected on the approval page")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -52,7 +53,19 @@ func cmdLogin(args []string, out io.Writer) error {
 		return fmt.Errorf("%s: %w (is this a registry with accounts enabled?)", base, err)
 	}
 
-	fmt.Fprintf(out, "\n  Open:  %s\n  Code:  %s\n\n", start.VerificationURL, start.UserCode)
+	// The link carries the code and, when asked for, the organization, so the
+	// approval page opens with both filled in. It still takes a click, and the
+	// organization is on screen before it does: a token is bound to one for
+	// life, and approving into the wrong one used to be silent.
+	link := start.VerificationURL + "?code=" + urlEscape(start.UserCode)
+	if *org != "" {
+		link += "&org=" + urlEscape(strings.ToLower(strings.TrimSpace(*org)))
+	}
+	fmt.Fprintf(out, "\n  Open:  %s\n  Code:  %s\n", link, start.UserCode)
+	if *org != "" {
+		fmt.Fprintf(out, "  Org:   %s — check it is the one selected before approving\n", *org)
+	}
+	fmt.Fprintln(out)
 	fmt.Fprintf(out, "waiting for approval… (ctrl-c to stop)\n")
 
 	interval := time.Duration(max(start.Interval, 1)) * time.Second
@@ -77,9 +90,18 @@ func cmdLogin(args []string, out io.Writer) error {
 		if err := client.SaveToken(base, poll.Token); err != nil {
 			return fmt.Errorf("could not save the token: %w", err)
 		}
-		who := whoamiLine(base, poll.Token)
-		fmt.Fprintf(out, "\nsigned in%s\n", who)
+		var me meResp
+		_ = apiJSON(http.MethodGet, base+"/v1/me", poll.Token, nil, &me)
+		fmt.Fprintf(out, "\nsigned in%s\n", me.describe())
 		fmt.Fprintf(out, "token saved to %s\n", client.CredentialsPath())
+		if want := strings.ToLower(strings.TrimSpace(*org)); want != "" && me.Org.Slug != "" && me.Org.Slug != want {
+			// Not an error: the token exists and works. But it is bound to an
+			// organization the caller did not ask for, for good, and that is
+			// worth stopping a script over.
+			fmt.Fprintf(out, "\nWARNING: you asked for %q but approved %q. The token cannot be moved — "+
+				"revoke it (`deconflict token revoke`) and log in again if that was not intended.\n", want, me.Org.Slug)
+			return exitCode{3}
+		}
 		return nil
 	}
 	return fmt.Errorf("timed out waiting for approval")
@@ -138,6 +160,11 @@ func cmdWhoami(args []string, out io.Writer) error {
 		fmt.Fprintf(out, " (%s)", me.User.Name)
 	}
 	fmt.Fprintf(out, " — %s, %s\n", me.User.Role, me.User.Status)
+	if me.Org.Name != "" || me.Org.Slug != "" {
+		fmt.Fprintf(out, "org:      %s (%s)\n", me.Org.Name, me.Org.Slug)
+	} else if me.OrgID != "" {
+		fmt.Fprintf(out, "org:      %s\n", me.OrgID)
+	}
 	fmt.Fprintf(out, "via:      %s\n", me.Via)
 	var on []string
 	for k, v := range me.Features {
@@ -159,18 +186,33 @@ type meResp struct {
 		Role   string `json:"role"`
 		Status string `json:"status"`
 	} `json:"user"`
+	// The organization this credential acts in. A token is bound to one for
+	// life; Org is empty against a registry older than the field.
+	OrgID string `json:"org_id,omitempty"`
+	Org   struct {
+		ID   string `json:"id,omitempty"`
+		Slug string `json:"slug,omitempty"`
+		Name string `json:"name,omitempty"`
+	} `json:"org"`
 	Via      string          `json:"via"`
 	IsAdmin  bool            `json:"is_admin"`
 	Mode     string          `json:"mode"`
 	Features map[string]bool `json:"features"`
 }
 
-func whoamiLine(base, token string) string {
-	var me meResp
-	if err := apiJSON(http.MethodGet, base+"/v1/me", token, nil, &me); err != nil {
+// describe is the "signed in …" tail: who, and in which organization.
+func (me meResp) describe() string {
+	if me.User.Login == "" {
 		return ""
 	}
-	return " as " + me.User.Login
+	s := " as " + me.User.Login
+	if me.Org.Name != "" {
+		s += " in organization " + me.Org.Name
+		if me.Org.Slug != "" {
+			s += " (" + me.Org.Slug + ")"
+		}
+	}
+	return s
 }
 
 // ---------- personal API tokens ----------
