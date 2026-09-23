@@ -40,7 +40,7 @@ jobs:
               tar -C "build/$name" -czf "dist/$name.tar.gz" "$bin"
             fi
           done
-          (cd dist && sha256sum * > SHA256SUMS)
+          (cd dist && sha256sum deconflict_* > SHA256SUMS)
           cat dist/SHA256SUMS
       - name: Publish
         env:
