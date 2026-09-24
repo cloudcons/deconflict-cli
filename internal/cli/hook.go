@@ -76,6 +76,14 @@ func cmdHook(args []string, out io.Writer) error {
 				}
 				text += held
 			}
+			// Local and cheap, so it runs even with no registry reachable: an
+			// out-of-date skill is a problem on this machine, not the server.
+			if stale := skillContext(cwd); stale != "" {
+				if text != "" {
+					text += "\n\n"
+				}
+				text += stale
+			}
 		}
 	case "pre-tool":
 		text = preToolContext(*dsn, cwd, in)

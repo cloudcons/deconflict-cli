@@ -58,6 +58,8 @@ Agent coordination
                                              negotiate access and commitments
   deconflict message <register|send|inbox|watch|ack|presence>
                                              interoperable agent mailbox
+  deconflict cooler  <rooms|say|ask|need|offer|note|status|roll|needs|…>
+                                             the watercooler: questions, needs, heads-ups
   deconflict mcp                              MCP server for Claude Code and Codex
 
 Account (registries with accounts enabled)
@@ -118,6 +120,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdNegotiate(rest, stdout)
 	case "message", "messages", "agent":
 		err = cmdMessage(rest, stdout)
+	case "cooler", "watercooler":
+		err = cmdCooler(rest, stdout)
 	case "mcp":
 		err = cmdMCP(rest, os.Stdin, stdout)
 	case "settings":
@@ -338,13 +342,19 @@ func cmdClaim(args []string, out io.Writer) error {
 		return nil
 	}
 	writeCurrent(cwd, c.ID)
+	notes := claimNotes(st, c.Repo, c.Paths)
 
 	if *asJSON {
-		return encodeJSON(out, map[string]any{"claim": c, "conflicts": conflicts, "dependencies": dependencies, "dependents": dependents})
+		return encodeJSON(out, map[string]any{"claim": c, "conflicts": conflicts, "dependencies": dependencies, "dependents": dependents, "heads_up": notes})
 	}
 	fmt.Fprintf(out, "claimed %s  %s  (lease %s)\n", c.ID, strings.Join(c.Paths, ", "), *ttl)
 	if len(c.Uses) > 0 {
 		fmt.Fprintf(out, "  uses %s\n", strings.Join(c.Uses, ", "))
+	}
+	// Heads-ups are read, not contended: they never change the exit code.
+	if len(notes) > 0 {
+		fmt.Fprintln(out)
+		fmt.Fprint(out, renderNotes(notes))
 	}
 	if len(conflicts) == 0 && len(dependencies) == 0 && len(dependents) == 0 {
 		fmt.Fprintln(out, "no overlapping claims.")

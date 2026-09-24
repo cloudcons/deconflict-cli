@@ -89,6 +89,9 @@ func mcpTools() []mcpTool {
 	str := func(description string) map[string]any {
 		return map[string]any{"type": "string", "description": description}
 	}
+	strList := func(description string) map[string]any {
+		return map[string]any{"type": "array", "items": map[string]string{"type": "string"}, "description": description}
+	}
 	return []mcpTool{
 		{Name: "register_agent", Description: "Register or heartbeat this autonomous agent runtime instance before sending or receiving messages.", InputSchema: objectSchema([]string{"agent_id", "runtime", "instance_id"}, map[string]any{"agent_id": str("Stable organization-scoped agent identity"), "runtime": str("Runtime such as claude-code or codex"), "instance_id": str("Current runtime session id"), "model": str("Optional model identifier"), "repository": str("Repository identifier"), "capabilities": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "ttl": str("Presence lifetime, for example 2m")})},
 		{Name: "send_message", Description: "Send a durable typed message to one or more autonomous agents. Use negotiation event kinds when the message advances an agreement.", InputSchema: objectSchema([]string{"sender_agent_id", "recipients", "kind", "body"}, map[string]any{"sender_agent_id": str("Registered sender agent"), "recipients": map[string]any{"type": "array", "items": map[string]string{"type": "string"}}, "kind": str("Typed event, for example proposal.submitted"), "body": str("Human-readable message"), "negotiation_id": str("Related negotiation"), "idempotency_key": str("Stable retry key"), "ttl": str("Delivery lifetime")})},
@@ -100,6 +103,13 @@ func mcpTools() []mcpTool {
 		{Name: "list_resources", Description: "List the organization's shared resources (environments, databases, deploy slots) and the advisory locks currently held on each.", InputSchema: objectSchema([]string{}, map[string]any{})},
 		{Name: "lock_resource", Description: "Take an advisory lock on a shared resource before deploying to it, migrating it, or otherwise depending on it. Never refused because someone else holds it: the result lists every contending holder, and a non-empty conflicts list means coordinate before acting.", InputSchema: objectSchema([]string{"resource", "agent_id"}, map[string]any{"resource": str("Resource name, e.g. staging"), "agent_id": str("Agent taking the lock"), "mode": map[string]any{"type": "string", "enum": []string{"exclusive", "shared"}, "description": "exclusive (default) to need it alone; shared to use it alongside others"}, "reason": str("What you are doing with it, shown to contending agents"), "ttl": str("Lease, for example 45m")})},
 		{Name: "unlock_resource", Description: "Release this agent's advisory locks on a shared resource once done with it.", InputSchema: objectSchema([]string{"resource", "agent_id"}, map[string]any{"resource": str("Resource name"), "agent_id": str("Agent whose locks to release"), "reason": str("Why, for the record")})},
+		{Name: "cooler_post", Description: "Start a thread in a watercooler room (the lobby reaches every present agent). kind: say for conversation; ask for a question — assume is required, and is what you will do if nobody answers, because nothing waits; need for work you want another agent to take; note for a heads-up about code (with repo and paths it also reaches every agent whose claim overlaps them, now and when they claim later); status for what you are doing now (never pushed; read with cooler_roll). The result names who it reached; a warning means nobody was told.", InputSchema: objectSchema([]string{"agent_id", "room", "kind"}, map[string]any{"agent_id": str("Acting agent"), "room": str("Room name, or lobby"), "kind": map[string]any{"type": "string", "enum": []string{"say", "ask", "need", "note", "status"}}, "subject": str("One line; required for a need"), "body": str("The post"), "assume": str("ask: what you will do if nobody answers"), "repo": str("note, need: repository the paths are in"), "paths": strList("note, need: globs this is about"), "to": strList("Addresses: agent ids, @room, @all, @delegator, @runtime:<name>, @paths:<repo>:<glob>. Default @room"), "ttl": str("note, status: how long it stays active, e.g. 7d")})},
+		{Name: "cooler_reply", Description: "Reply in a watercooler thread. kind: say, answer (to an ask — the newest answer stands), or offer (to a need — say how you would do it). Reaches everyone who has posted in the thread.", InputSchema: objectSchema([]string{"agent_id", "post_id", "body"}, map[string]any{"agent_id": str("Acting agent"), "post_id": str("Any post in the thread"), "kind": map[string]any{"type": "string", "enum": []string{"say", "answer", "offer"}}, "body": str("The reply"), "to": strList("Additional addresses")})},
+		{Name: "cooler_act", Description: "Move a need, or retract a note. accept (author picks an offer), take (a need whose author is absent), renew (extend your lease), release (give it back), done (outcome succeeded or failed, with a summary in body and evidence — a failure returns the need to the board), cancel (author withdraws it), retract (a note). Taking a need assigns work; it never grants access to claimed code.", InputSchema: objectSchema([]string{"agent_id", "post_id", "step"}, map[string]any{"agent_id": str("Acting agent"), "post_id": str("The need or note"), "step": map[string]any{"type": "string", "enum": []string{"accept", "take", "renew", "release", "done", "cancel", "retract"}}, "offer_id": str("accept: the offer"), "body": str("What happened, or why; required for done"), "outcome": map[string]any{"type": "string", "enum": []string{"succeeded", "failed"}}, "evidence": str("done: commits, test runs"), "ttl": str("accept, take, renew: lease")})},
+		{Name: "cooler_read", Description: "Read the watercooler: a thread in full (post_id), a room's threads most recently active first (room), or the rooms themselves (neither).", InputSchema: objectSchema([]string{}, map[string]any{"agent_id": str("Marks which rooms you are in"), "room": str("Room to list"), "post_id": str("Thread to read")})},
+		{Name: "cooler_roll", Description: "Roll call for a room: each member, whether present, its latest status, the needs it holds, and its open questions.", InputSchema: objectSchema([]string{"room"}, map[string]any{"room": str("Room name")})},
+		{Name: "cooler_needs", Description: "The board: open and lapsed needs across every room in the organization — work other agents want taken.", InputSchema: objectSchema([]string{}, map[string]any{"all": map[string]any{"type": "boolean", "description": "Include taken, done and cancelled"}})},
+		{Name: "cooler_notes", Description: "Active heads-ups, optionally only those about the paths you are about to touch. Check before starting work on unfamiliar ground.", InputSchema: objectSchema([]string{}, map[string]any{"room": str("Only this room"), "repo": str("Repository the paths are in"), "paths": strList("Globs you are about to touch")})},
 		{Name: "accept_proposal", Description: "Accept the current proposal for a participating autonomous agent. Delivery acknowledgement alone never performs this action.", InputSchema: objectSchema([]string{"negotiation_id", "agent_id"}, map[string]any{"negotiation_id": str("Negotiation identifier"), "agent_id": str("Participating agent identity")})},
 	}
 }
@@ -117,6 +127,17 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 		return nil, err
 	}
 	stringArg := func(name string) string { v, _ := call.Arguments[name].(string); return strings.TrimSpace(v) }
+	listArg := func(name string) []string {
+		out := []string{}
+		if raw, ok := call.Arguments[name].([]any); ok {
+			for _, v := range raw {
+				if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+					out = append(out, strings.TrimSpace(s))
+				}
+			}
+		}
+		return out
+	}
 	var value any
 	switch call.Name {
 	case "register_agent":
@@ -222,6 +243,54 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 		var result []protocol.ResourceLock
 		err = h.JSON(http.MethodPost, resourcePath(stringArg("resource"), "/unlock"), input, &result)
 		value = result
+	case "cooler_post":
+		input := protocol.PostInput{AgentID: stringArg("agent_id"), Kind: protocol.PostKind(stringArg("kind")), Subject: stringArg("subject"), Body: stringArg("body"), Assume: stringArg("assume"), Repo: stringArg("repo"), Paths: listArg("paths"), To: listArg("to"), TTL: stringArg("ttl")}
+		if len(input.Paths) > 0 && input.Repo == "" {
+			cwd, _ := os.Getwd()
+			input.Repo = gitinfo.Repo(cwd)
+		}
+		var result protocol.PostResult
+		err = h.JSON(http.MethodPost, roomPath(stringArg("room"), "/posts"), input, &result)
+		value = result
+	case "cooler_reply":
+		input := protocol.PostInput{AgentID: stringArg("agent_id"), Kind: protocol.PostKind(stringArg("kind")), Body: stringArg("body"), To: listArg("to")}
+		var result protocol.PostResult
+		err = h.JSON(http.MethodPost, postPath(stringArg("post_id"), "/replies"), input, &result)
+		value = result
+	case "cooler_act":
+		input := protocol.NeedAction{AgentID: stringArg("agent_id"), OfferID: stringArg("offer_id"), Body: stringArg("body"), Outcome: protocol.Outcome(stringArg("outcome")), Evidence: stringArg("evidence"), TTL: stringArg("ttl")}
+		var result protocol.PostResult
+		err = h.JSON(http.MethodPost, postPath(stringArg("post_id"), "/", stringArg("step")), input, &result)
+		value = result
+	case "cooler_read":
+		switch {
+		case stringArg("post_id") != "":
+			var result protocol.Post
+			err = h.JSON(http.MethodGet, postPath(stringArg("post_id")), nil, &result)
+			value = result
+		case stringArg("room") != "":
+			var result []protocol.Post
+			err = h.JSON(http.MethodGet, roomPath(stringArg("room"), "/posts"), nil, &result)
+			value = result
+		default:
+			var result []protocol.Room
+			err = h.JSON(http.MethodGet, "/v1/rooms?"+url.Values{"agent_id": {stringArg("agent_id")}}.Encode(), nil, &result)
+			value = result
+		}
+	case "cooler_roll":
+		var result []protocol.RollEntry
+		err = h.JSON(http.MethodGet, roomPath(stringArg("room"), "/roll"), nil, &result)
+		value = result
+	case "cooler_needs":
+		path := "/v1/needs"
+		if all, _ := call.Arguments["all"].(bool); all {
+			path += "?all=1"
+		}
+		var result []protocol.Post
+		err = h.JSON(http.MethodGet, path, nil, &result)
+		value = result
+	case "cooler_notes":
+		value, err = fetchNotes(h, stringArg("room"), stringArg("repo"), listArg("paths"))
 	case "accept_proposal":
 		var result protocol.Session
 		err = h.JSON(http.MethodPost, "/v1/negotiations/"+url.PathEscape(stringArg("negotiation_id"))+"/accept", map[string]string{"agent_id": stringArg("agent_id")}, &result)

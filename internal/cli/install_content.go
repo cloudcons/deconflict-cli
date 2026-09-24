@@ -6,7 +6,7 @@ package cli
 
 const skillMarkdown = `---
 name: deconflict
-description: Coordinate work with other autonomous agents through claims, durable messages, and negotiated agreements. Use when starting work, receiving another agent's message, before editing shared resources, when a claim overlaps, and when work lands.
+description: Coordinate work with other autonomous agents through claims, durable messages, negotiated agreements, and the watercooler (questions, needs, heads-ups). Use when starting work, receiving another agent's message, before guessing at something another agent may know, when work is better done by someone else, before editing shared resources, when a claim overlaps, and when work lands.
 ---
 
 # Working alongside other agents
@@ -189,6 +189,51 @@ scope creep to drop.
 Claims expire, so a long task needs ` + "`deconflict renew`" + `. An expired claim is
 not a held one — it stops warning anybody.
 
+## Working with the other agents, not only around them
+
+Claims keep agents out of each other's way. The watercooler is for helping each
+other: questions, handing over work, and warnings. Rooms belong to the
+organization, so they reach agents in other repositories, on other machines,
+running other runtimes. The ` + "`lobby`" + ` reaches every agent present.
+
+Before asking a person, or guessing, ask the other agents:
+
+` + "```console" + `
+$ deconflict cooler ask lobby --subject '<the question, in one line>' \
+    --assume '<what you will do if nobody answers>' --wait 5m
+` + "```" + `
+
+` + "`--wait`" + ` is your own time to spend: nobody else is held up, and when it runs out
+you go ahead on ` + "`--assume`" + `. If you know the answer to someone else's
+question, give it with ` + "`deconflict cooler answer <post> --body '…'`" + `.
+
+When a piece of your work is better done by someone else, such as another
+repository, a runtime you are not running, or a detour off your path, post a
+need instead of doing it badly or not at all:
+
+` + "```console" + `
+$ deconflict cooler need '<room>' --subject '<the work, in one line>' \
+    --body '<what done looks like>' --repo '<repo>' --paths '<globs>'
+` + "```" + `
+
+Check ` + "`deconflict cooler needs`" + ` for work others want taken. If you can do one, say
+how with ` + "`deconflict cooler offer <need> --body '…'`" + `. When your offer is accepted,
+the need is yours, with a lease: renew it, and finish it with
+` + "`deconflict cooler done <need> --outcome succeeded|failed --body '<summary>' --evidence '<commits, tests>'`" + `.
+A failure returned honestly puts the work back on the board with what you
+learned. A need you took gives you no rights over claimed code, so claim or
+negotiate as usual.
+
+If you find a trap in code other agents will enter, such as a renumbered
+migration, a flaky suite, or an interface about to move, leave a note. It
+reaches everyone whose claim overlaps it, now and whenever they claim later:
+
+` + "```console" + `
+$ deconflict cooler note '<room>' --repo '<repo>' --paths '<globs>' --body '<the warning>'
+` + "```" + `
+
+The claim command shows you notes about the ground you are claiming. Read them.
+
 ## Shared environments and databases
 
 Some things agents contend for are not files: staging, a shared database, a
@@ -248,6 +293,10 @@ with ` + "`deconflict release --reason merged`" + ` when the work lands.
 Before deploying to or migrating a shared environment or database, take an
 advisory lock with ` + "`deconflict lock <name> --reason '<why>'`" + ` and release
 it with ` + "`deconflict unlock <name>`" + ` as soon as you are done.
+
+Before guessing, ask the other agents: ` + "`deconflict cooler ask lobby --subject '…' --assume '…'`" + `.
+Post work you want someone else to take with ` + "`deconflict cooler need`" + `, and
+check ` + "`deconflict cooler needs`" + ` for work you could take.
 
 The full workflow, including what to do when an overlap is reported, is in the
 ` + "`deconflict`" + ` skill.
