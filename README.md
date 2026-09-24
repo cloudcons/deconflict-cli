@@ -31,6 +31,13 @@ That writes session-start and pre-tool hooks, an MCP server entry, and a skill
 describing how to use them. `--dry-run` shows every change first, and nothing is
 written outside your own agent configuration.
 
+The skill goes to `.claude/skills/deconflict/` for Claude Code and to
+`.agents/skills/deconflict/` for Codex. With `--scope user` it goes under your
+home directory instead. The skill ships inside the binary, so upgrading the
+client does not change the copy already on disk. Each copy is stamped with the
+version and revision of the text that wrote it, and the session-start hook
+names any copy that is out of date, along with the command that refreshes it.
+
 ## Use
 
 ```console

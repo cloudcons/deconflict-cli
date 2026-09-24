@@ -109,7 +109,7 @@ func cmdInstall(args []string, out io.Writer) error {
 	agent := fs.String("agent", "auto", "claude|codex|all|auto (auto installs for the agents it finds)")
 	scope := fs.String("scope", "project", "project (this repo) or user (every repo you open)")
 	dir := fs.String("dir", ".", "repository to install into")
-	withSkill := fs.Bool("skill", true, "install the skill that teaches the claiming workflow")
+	withSkill := fs.Bool("skill", true, "install the skill that teaches the workflow (Claude Code and Codex)")
 	withDoc := fs.Bool("doc", true, "add the announce-yourself rule to CLAUDE.md / AGENTS.md")
 	dry := fs.Bool("dry-run", false, "print what would change and write nothing")
 	if err := fs.Parse(args); err != nil {
@@ -179,6 +179,19 @@ func cmdInstall(args []string, out io.Writer) error {
 			}
 			if err := add(installCodexMCP(filepath.Join(home, ".codex", "config.toml"), bin, *dry)); err != nil {
 				return err
+			}
+			// Skills, unlike hooks, do have a per-repository form: Codex reads
+			// them from .agents/skills, the shared location other agent tools
+			// install into as well. Without this a Codex agent had the one-line
+			// rule in AGENTS.md and never the workflow it points at.
+			if *withSkill {
+				skillDir := filepath.Join(root, ".agents", "skills", "deconflict")
+				if *scope == "user" {
+					skillDir = filepath.Join(home, ".agents", "skills", "deconflict")
+				}
+				if err := add(installSkill(filepath.Join(skillDir, "SKILL.md"), *dry)); err != nil {
+					return err
+				}
 			}
 			if *withDoc {
 				if err := add(installGuidance(filepath.Join(root, "AGENTS.md"), *dry)); err != nil {
@@ -449,7 +462,7 @@ func installSkill(path string, dry bool) (installChange, error) {
 	if err != nil {
 		return installChange{}, err
 	}
-	return writeTextIfChanged(path, before, skillMarkdown, "claiming workflow skill", dry)
+	return writeTextIfChanged(path, before, renderSkill(), "coordination workflow skill", dry)
 }
 
 const guidanceStart = "<!-- deconflict:start -->"
