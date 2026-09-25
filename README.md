@@ -17,9 +17,51 @@ stop your work is worse than no system at all.
 
 ## Install
 
+macOS and Linux, with Homebrew:
+
+```console
+$ brew install cloudcons/tap/deconflict
+```
+
+Debian, Ubuntu and other apt systems:
+
+```console
+$ curl -1sLf https://dl.cloudsmith.io/public/cloudcons/deconflict/setup.deb.sh | sudo bash
+$ sudo apt-get install deconflict
+```
+
+Fedora, RHEL and other dnf/yum systems:
+
+```console
+$ curl -1sLf https://dl.cloudsmith.io/public/cloudcons/deconflict/setup.rpm.sh | sudo bash
+$ sudo dnf install deconflict
+```
+
+Anywhere else, the install script puts the binary in `~/.local/bin`
+(`--dir` to change it, `--version` to pin one) after checking it against the
+release's `SHA256SUMS`:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/cloudcons/deconflict-cli/main/install.sh | sh
+```
+
+On Windows, in PowerShell:
+
+```powershell
+PS> irm https://raw.githubusercontent.com/cloudcons/deconflict-cli/main/install.ps1 | iex
+```
+
+Or from source, with Go:
+
 ```console
 $ go install github.com/cloudcons/deconflict-cli/cmd/deconflict@latest
 ```
+
+Every [release](https://github.com/cloudcons/deconflict-cli/releases) also
+carries the archives, `.deb` and `.rpm` files and their checksums directly.
+
+Package repository hosting is graciously provided by
+[Cloudsmith](https://cloudsmith.com), free for open-source projects.
 
 Then wire it into the agents you run:
 

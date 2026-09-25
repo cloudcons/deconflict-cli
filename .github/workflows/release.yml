@@ -1,31 +1,67 @@
 name: release
 
-# A v* tag becomes a GitHub release with one archive per platform and a
-# checksum file. Machines that install this through configuration management
-# pin a version and verify a checksum; `go install` needs a Go toolchain on a
-# box that otherwise has no reason to carry one.
+# A v* tag becomes a GitHub release with one archive per platform, a .deb and
+# .rpm per Linux architecture, and a checksum file. Machines that install this
+# through configuration management pin a version and verify a checksum; `go
+# install` needs a Go toolchain on a box that otherwise has no reason to carry
+# one.
+#
+# The release then fans out to the apt and yum repository on Cloudsmith
+# (secret CLOUDSMITH_API_KEY; variable CLOUDSMITH_REPO, owner/repo), which
+# reads the packages back from the release rather than from this job, so it
+# ships the bytes SHA256SUMS vouches for. With the secret missing it is skipped
+# with a warning rather than failing the release; once it exists, dispatch this
+# workflow from main with the tag to publish that release without rebuilding.
+#
+# CLOUDSMITH_API_KEY is a copy. The original lives in Infisical (project
+# homelab-qo-f8, env prod, /deconflict/ci), which runners cannot reach because
+# it is LAN-only. Rotate it there, then copy it across from a LAN machine:
+#
+#   infisical secrets get CLOUDSMITH_API_KEY --env prod --path /deconflict/ci \
+#     --domain https://infisical.cloudops.ro/api \
+#     --projectId c23fe772-7767-4a8d-a6df-f6abdd86ce63 --plain --silent \
+#     | gh secret set CLOUDSMITH_API_KEY -R cloudcons/deconflict-cli
+#
+# Homebrew is not pushed from here. cloudcons/homebrew-tap polls for the latest
+# release and regenerates its formula with packaging/homebrew.sh, so this
+# repository holds no credential for the tap.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to republish to Cloudsmith (e.g. v0.1.9)
+        required: true
 
 permissions:
   contents: write
 
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO || 'cloudcons/deconflict' }}
+
 jobs:
   release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Installed from outside the checkout so it cannot touch this module's
+      # go.mod: the module has no dependencies, and nfpm has plenty.
+      - name: Install nfpm
+        working-directory: ${{ runner.temp }}
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
       - name: Build
         env:
           CGO_ENABLED: '0'
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          mkdir -p dist
+          mkdir -p dist build/package
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             goos="${target%/*}" goarch="${target#*/}"
             name="deconflict_${version}_${goos}_${goarch}"
@@ -39,10 +75,76 @@ jobs:
             else
               tar -C "build/$name" -czf "dist/$name.tar.gz" "$bin"
             fi
+            if [ "$goos" = linux ]; then
+              cp "build/$name/$bin" build/package/deconflict
+              for packager in deb rpm; do
+                VERSION="$version" GOARCH="$goarch" nfpm package -f packaging/nfpm.yaml -p "$packager" -t dist/
+              done
+            fi
           done
-          (cd dist && sha256sum deconflict_* > SHA256SUMS)
+          (cd dist && sha256sum deconflict[_-]* > SHA256SUMS)
           cat dist/SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+
+  cloudsmith:
+    needs: release
+    if: ${{ !cancelled() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.push.outputs.published }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::CLOUDSMITH_API_KEY is not set; $TAG was not published to the apt and yum repository"
+            echo skip=true >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@v7
+      - id: push
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.deb' -p '*.rpm' -D pkgs
+          ls pkgs
+          # any-distro/any-version: the binary is static, so one upload serves
+          # every Debian-family and every RPM-family release.
+          # --republish lets a dispatch rerun replace what an earlier run pushed.
+          for f in pkgs/*.deb; do
+            uvx --from cloudsmith-cli==1.27.0 cloudsmith push deb --republish "$CLOUDSMITH_REPO/any-distro/any-version" "$f"
+          done
+          for f in pkgs/*.rpm; do
+            uvx --from cloudsmith-cli==1.27.0 cloudsmith push rpm --republish "$CLOUDSMITH_REPO/any-distro/any-version" "$f"
+          done
+          echo published=true >> "$GITHUB_OUTPUT"
+
+  # Install the way a user would, in a clean container, and check the version
+  # that comes back is the one just released.
+  verify-packages:
+    needs: cloudsmith
+    if: needs.cloudsmith.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:stable-slim
+            install: apt-get update -qq && apt-get install -y -qq curl >/dev/null && curl -1sLf "$SETUP.deb.sh" | bash && apt-get install -y deconflict
+          - image: fedora:latest
+            install: curl -1sLf "$SETUP.rpm.sh" | bash && dnf install -y deconflict
+    container: ${{ matrix.image }}
+    steps:
+      - env:
+          SETUP: https://dl.cloudsmith.io/public/${{ env.CLOUDSMITH_REPO }}/setup
+        run: |
+          set -eu
+          ${{ matrix.install }}
+          deconflict version | tee /dev/stderr | grep -qx "deconflict ${TAG#v}"
