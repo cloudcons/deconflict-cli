@@ -58,3 +58,29 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: go build ./cmd/deconflict
+
+  # The install scripts run against the latest published release, on the
+  # platforms they claim to support, so a change to either is tested the way a
+  # user would meet it.
+  install-script:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - if: runner.os == 'Linux'
+        run: shellcheck -s sh install.sh packaging/homebrew.sh
+      - if: runner.os != 'Windows'
+        run: |
+          sh install.sh --dir "$RUNNER_TEMP/bin"
+          "$RUNNER_TEMP/bin/deconflict" version
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          DECONFLICT_INSTALL_DIR: ${{ runner.temp }}\bin
+        run: |
+          ./install.ps1
+          & "$env:DECONFLICT_INSTALL_DIR\deconflict.exe" version
+          if ($LASTEXITCODE -ne 0) { exit 1 }

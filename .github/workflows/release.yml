@@ -1,31 +1,61 @@
 name: release
 
-# A v* tag becomes a GitHub release with one archive per platform and a
-# checksum file. Machines that install this through configuration management
-# pin a version and verify a checksum; `go install` needs a Go toolchain on a
-# box that otherwise has no reason to carry one.
+# A v* tag becomes a GitHub release with one archive per platform, a .deb and
+# .rpm per Linux architecture, and a checksum file. Machines that install this
+# through configuration management pin a version and verify a checksum; `go
+# install` needs a Go toolchain on a box that otherwise has no reason to carry
+# one.
+#
+# The release then fans out to the package managers, each reading the assets
+# back from the release rather than from this job, so every channel ships the
+# bytes SHA256SUMS vouches for:
+#
+#   homebrew    Formula/deconflict.rb in cloudcons/homebrew-tap
+#               (secret HOMEBREW_TAP_TOKEN: a fine-grained token with Contents
+#               read/write on that one repository; the org disables deploy keys)
+#   cloudsmith  the apt and yum repository
+#               (secret CLOUDSMITH_API_KEY; variable CLOUDSMITH_REPO, owner/repo)
+#
+# A channel whose secret is missing is skipped with a warning rather than
+# failing the release. Once the secret exists, dispatch this workflow from main
+# with the tag to publish that release to the channels without rebuilding it.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to republish to Homebrew and Cloudsmith (e.g. v0.1.9)
+        required: true
 
 permissions:
   contents: write
 
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+  CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO || 'cloudcons/deconflict' }}
+
 jobs:
   release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Installed from outside the checkout so it cannot touch this module's
+      # go.mod: the module has no dependencies, and nfpm has plenty.
+      - name: Install nfpm
+        working-directory: ${{ runner.temp }}
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
       - name: Build
         env:
           CGO_ENABLED: '0'
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
-          mkdir -p dist
+          mkdir -p dist build/package
           for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             goos="${target%/*}" goarch="${target#*/}"
             name="deconflict_${version}_${goos}_${goarch}"
@@ -39,10 +69,133 @@ jobs:
             else
               tar -C "build/$name" -czf "dist/$name.tar.gz" "$bin"
             fi
+            if [ "$goos" = linux ]; then
+              cp "build/$name/$bin" build/package/deconflict
+              for packager in deb rpm; do
+                VERSION="$version" GOARCH="$goarch" nfpm package -f packaging/nfpm.yaml -p "$packager" -t dist/
+              done
+            fi
           done
-          (cd dist && sha256sum deconflict_* > SHA256SUMS)
+          (cd dist && sha256sum deconflict[_-]* > SHA256SUMS)
           cat dist/SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+
+  homebrew:
+    needs: release
+    if: ${{ !cancelled() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.push.outputs.published }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN is not set; $TAG was not published to Homebrew"
+            echo skip=true >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          path: src
+          sparse-checkout: packaging
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: cloudcons/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+      - id: push
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p SHA256SUMS -D "$RUNNER_TEMP"
+          mkdir -p tap/Formula
+          src/packaging/homebrew.sh "${TAG#v}" "$RUNNER_TEMP/SHA256SUMS" > tap/Formula/deconflict.rb
+          cd tap
+          git add Formula/deconflict.rb
+          if git diff --cached --quiet; then
+            echo "formula already at $TAG"
+          else
+            git -c user.name='github-actions[bot]' \
+                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+                commit -q -m "deconflict ${TAG#v}"
+            git push -q origin HEAD
+          fi
+          echo published=true >> "$GITHUB_OUTPUT"
+
+  cloudsmith:
+    needs: release
+    if: ${{ !cancelled() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.push.outputs.published }}
+    steps:
+      - id: check
+        env:
+          KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::warning::CLOUDSMITH_API_KEY is not set; $TAG was not published to the apt and yum repository"
+            echo skip=true >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.check.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@v7
+      - id: push
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.deb' -p '*.rpm' -D pkgs
+          ls pkgs
+          # any-distro/any-version: the binary is static, so one upload serves
+          # every Debian-family and every RPM-family release.
+          # --republish lets a dispatch rerun replace what an earlier run pushed.
+          for f in pkgs/*.deb; do
+            uvx --from cloudsmith-cli==1.27.0 cloudsmith push deb --republish "$CLOUDSMITH_REPO/any-distro/any-version" "$f"
+          done
+          for f in pkgs/*.rpm; do
+            uvx --from cloudsmith-cli==1.27.0 cloudsmith push rpm --republish "$CLOUDSMITH_REPO/any-distro/any-version" "$f"
+          done
+          echo published=true >> "$GITHUB_OUTPUT"
+
+  # Install through each channel the way a user would, from a clean runner, and
+  # check the version that comes back is the one just released.
+  verify-homebrew:
+    needs: homebrew
+    if: needs.homebrew.outputs.published == 'true'
+    runs-on: macos-latest
+    steps:
+      - run: |
+          set -euo pipefail
+          brew install cloudcons/tap/deconflict
+          deconflict version | tee /dev/stderr | grep -qx "deconflict ${TAG#v}"
+
+  verify-packages:
+    needs: cloudsmith
+    if: needs.cloudsmith.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:stable-slim
+            install: apt-get update -qq && apt-get install -y -qq curl >/dev/null && curl -1sLf "$SETUP.deb.sh" | bash && apt-get install -y deconflict
+          - image: fedora:latest
+            install: curl -1sLf "$SETUP.rpm.sh" | bash && dnf install -y deconflict
+    container: ${{ matrix.image }}
+    steps:
+      - env:
+          SETUP: https://dl.cloudsmith.io/public/${{ env.CLOUDSMITH_REPO }}/setup
+        run: |
+          set -eu
+          ${{ matrix.install }}
+          deconflict version | tee /dev/stderr | grep -qx "deconflict ${TAG#v}"
