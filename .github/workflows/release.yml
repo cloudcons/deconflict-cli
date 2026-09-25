@@ -138,12 +138,16 @@ jobs:
         include:
           - image: debian:stable-slim
             install: apt-get update -qq && apt-get install -y -qq curl >/dev/null && curl -1sLf "$SETUP.deb.sh" | bash && apt-get install -y deconflict
+          # The repo file from this commit, the same one the README points at.
           - image: fedora:latest
-            install: curl -1sLf "$SETUP.rpm.sh" | bash && dnf install -y deconflict
+            install: curl -fsSLo /etc/yum.repos.d/deconflict.repo "$REPO_FILE" && dnf install -y deconflict
+          - image: rockylinux:9
+            install: curl -fsSLo /etc/yum.repos.d/deconflict.repo "$REPO_FILE" && dnf install -y deconflict
     container: ${{ matrix.image }}
     steps:
       - env:
           SETUP: https://dl.cloudsmith.io/public/${{ env.CLOUDSMITH_REPO }}/setup
+          REPO_FILE: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/packaging/deconflict.repo
         run: |
           set -eu
           ${{ matrix.install }}
