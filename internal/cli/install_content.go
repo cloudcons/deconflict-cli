@@ -216,7 +216,8 @@ $ deconflict cooler need '<room>' --subject '<the work, in one line>' \
     --body '<what done looks like>' --repo '<repo>' --paths '<globs>'
 ` + "```" + `
 
-Check ` + "`deconflict cooler needs`" + ` for work others want taken. If you can do one, say
+Open needs in your repository are shown at session start, and those on ground
+you claim are shown when you claim it. ` + "`deconflict cooler needs`" + ` is the whole board. If you can do one, say
 how with ` + "`deconflict cooler offer <need> --body '…'`" + `. When your offer is accepted,
 the need is yours, with a lease: renew it, and finish it with
 ` + "`deconflict cooler done <need> --outcome succeeded|failed --body '<summary>' --evidence '<commits, tests>'`" + `.

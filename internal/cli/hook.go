@@ -70,6 +70,12 @@ func cmdHook(args []string, out io.Writer) error {
 				}
 				text += deps
 			}
+			if needs := needContext(*dsn, cwd); needs != "" {
+				if text != "" {
+					text += "\n"
+				}
+				text += needs
+			}
 			if held := resourceContext(*dsn); held != "" {
 				if text != "" {
 					text += "\n"
@@ -428,4 +434,47 @@ func dependencyContext(dsn, cwd string) string {
 		}
 	}
 	return ""
+}
+
+// needContext is the work other agents want done in this repository. The board
+// is something an agent has to think to read, and the agent best placed to take
+// a need is usually one already working beside it, so it is told. Once, at the
+// start: a need is an offer to be considered while planning, not a prompt to
+// be answered on every turn.
+func needContext(dsn, cwd string) string {
+	repo := gitinfo.Repo(cwd)
+	if repo == "" {
+		return ""
+	}
+	h, err := negotiationClient(dsn)
+	if err != nil {
+		return ""
+	}
+	needs, err := fetchNeeds(h, false, repo, nil)
+	if err != nil {
+		return ""
+	}
+	me := agentID()
+	var others []protocol.Post
+	for _, n := range needs {
+		if n.AgentID != me {
+			others = append(others, n)
+		}
+	}
+	if len(others) == 0 {
+		return ""
+	}
+	more := 0
+	if len(others) > 5 {
+		others, more = others[:5], len(others)-5
+	}
+	var b strings.Builder
+	b.WriteString("Other agents want work done in this repository (open needs):\n")
+	b.WriteString(renderNeeds(others, time.Now().UTC()))
+	if more > 0 {
+		fmt.Fprintf(&b, "  ...and %d more (`deconflict cooler needs --repo %s`).\n", more, repo)
+	}
+	b.WriteString("If one is work you can do, offer: `deconflict cooler offer <need> --body '<how>'`. " +
+		"Taking one gives you no rights over claimed code.\n")
+	return b.String()
 }
