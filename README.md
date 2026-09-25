@@ -26,14 +26,14 @@ $ brew install cloudcons/tap/deconflict
 Debian, Ubuntu and other apt systems:
 
 ```console
-$ curl -1sLf https://dl.cloudsmith.io/public/cloudcons/deconflict/setup.deb.sh | sudo bash
+$ curl -1sLf https://dl.cloudsmith.io/public/cloudops/deconflict/setup.deb.sh | sudo bash
 $ sudo apt-get install deconflict
 ```
 
 Fedora, RHEL and other dnf/yum systems:
 
 ```console
-$ curl -1sLf https://dl.cloudsmith.io/public/cloudcons/deconflict/setup.rpm.sh | sudo bash
+$ curl -1sLf https://dl.cloudsmith.io/public/cloudops/deconflict/setup.rpm.sh | sudo bash
 $ sudo dnf install deconflict
 ```
 

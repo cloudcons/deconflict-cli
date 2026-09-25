@@ -18,7 +18,8 @@ name: release
 # it is LAN-only. Rotate it there, then copy it across from a LAN machine:
 #
 #   infisical secrets get CLOUDSMITH_API_KEY --env prod --path /deconflict/ci \
-#     --projectId <homelab-qo-f8> --plain --silent \
+#     --domain https://infisical.cloudops.ro/api \
+#     --projectId c23fe772-7767-4a8d-a6df-f6abdd86ce63 --plain --silent \
 #     | gh secret set CLOUDSMITH_API_KEY -R cloudcons/deconflict-cli
 #
 # Homebrew is not pushed from here. cloudcons/homebrew-tap polls for the latest
@@ -38,7 +39,7 @@ permissions:
 
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
-  CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO || 'cloudcons/deconflict' }}
+  CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO || 'cloudops/deconflict' }}
 
 jobs:
   release:
