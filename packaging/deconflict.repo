@@ -1,0 +1,16 @@
+# dnf/yum repository for deconflict, hosted by Cloudsmith.
+#
+#   sudo curl -fsSLo /etc/yum.repos.d/deconflict.repo \
+#     https://raw.githubusercontent.com/cloudcons/deconflict-cli/main/packaging/deconflict.repo
+#
+# Used instead of Cloudsmith's setup.rpm.sh, whose generated file pins
+# sslcacert=/etc/pki/tls/certs/ca-bundle.crt: Fedora 44 no longer ships that
+# file, so dnf fails every TLS handshake. The packages are static binaries
+# pushed as any-distro/any-version, so one baseurl serves every RPM system.
+[deconflict]
+name=deconflict
+baseurl=https://dl.cloudsmith.io/public/cloudcons/deconflict/rpm/any-distro/any-version/$basearch
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://dl.cloudsmith.io/public/cloudcons/deconflict/gpg.0EE640A29BE88919.key

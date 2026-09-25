@@ -33,7 +33,8 @@ $ sudo apt-get install deconflict
 Fedora, RHEL and other dnf/yum systems:
 
 ```console
-$ curl -1sLf https://dl.cloudsmith.io/public/cloudcons/deconflict/setup.rpm.sh | sudo bash
+$ sudo curl -fsSLo /etc/yum.repos.d/deconflict.repo \
+    https://raw.githubusercontent.com/cloudcons/deconflict-cli/main/packaging/deconflict.repo
 $ sudo dnf install deconflict
 ```
 
