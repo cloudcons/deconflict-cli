@@ -6,26 +6,23 @@ name: release
 # install` needs a Go toolchain on a box that otherwise has no reason to carry
 # one.
 #
-# The release then fans out to the package managers, each reading the assets
-# back from the release rather than from this job, so every channel ships the
-# bytes SHA256SUMS vouches for:
+# The release then fans out to the apt and yum repository on Cloudsmith
+# (secret CLOUDSMITH_API_KEY; variable CLOUDSMITH_REPO, owner/repo), which
+# reads the packages back from the release rather than from this job, so it
+# ships the bytes SHA256SUMS vouches for. With the secret missing it is skipped
+# with a warning rather than failing the release; once it exists, dispatch this
+# workflow from main with the tag to publish that release without rebuilding.
 #
-#   homebrew    Formula/deconflict.rb in cloudcons/homebrew-tap
-#               (secret HOMEBREW_TAP_TOKEN: a fine-grained token with Contents
-#               read/write on that one repository; the org disables deploy keys)
-#   cloudsmith  the apt and yum repository
-#               (secret CLOUDSMITH_API_KEY; variable CLOUDSMITH_REPO, owner/repo)
-#
-# A channel whose secret is missing is skipped with a warning rather than
-# failing the release. Once the secret exists, dispatch this workflow from main
-# with the tag to publish that release to the channels without rebuilding it.
+# Homebrew is not pushed from here. cloudcons/homebrew-tap polls for the latest
+# release and regenerates its formula with packaging/homebrew.sh, so this
+# repository holds no credential for the tap.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to republish to Homebrew and Cloudsmith (e.g. v0.1.9)
+        description: Existing release tag to republish to Cloudsmith (e.g. v0.1.9)
         required: true
 
 permissions:
@@ -83,53 +80,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
 
-  homebrew:
-    needs: release
-    if: ${{ !cancelled() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
-    runs-on: ubuntu-latest
-    outputs:
-      published: ${{ steps.push.outputs.published }}
-    steps:
-      - id: check
-        env:
-          KEY: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          if [ -z "$KEY" ]; then
-            echo "::warning::HOMEBREW_TAP_TOKEN is not set; $TAG was not published to Homebrew"
-            echo skip=true >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.check.outputs.skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          path: src
-          sparse-checkout: packaging
-      - if: steps.check.outputs.skip != 'true'
-        uses: actions/checkout@v4
-        with:
-          repository: cloudcons/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          path: tap
-      - id: push
-        if: steps.check.outputs.skip != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p SHA256SUMS -D "$RUNNER_TEMP"
-          mkdir -p tap/Formula
-          src/packaging/homebrew.sh "${TAG#v}" "$RUNNER_TEMP/SHA256SUMS" > tap/Formula/deconflict.rb
-          cd tap
-          git add Formula/deconflict.rb
-          if git diff --cached --quiet; then
-            echo "formula already at $TAG"
-          else
-            git -c user.name='github-actions[bot]' \
-                -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-                commit -q -m "deconflict ${TAG#v}"
-            git push -q origin HEAD
-          fi
-          echo published=true >> "$GITHUB_OUTPUT"
-
   cloudsmith:
     needs: release
     if: ${{ !cancelled() && (needs.release.result == 'success' || needs.release.result == 'skipped') }}
@@ -167,18 +117,8 @@ jobs:
           done
           echo published=true >> "$GITHUB_OUTPUT"
 
-  # Install through each channel the way a user would, from a clean runner, and
-  # check the version that comes back is the one just released.
-  verify-homebrew:
-    needs: homebrew
-    if: needs.homebrew.outputs.published == 'true'
-    runs-on: macos-latest
-    steps:
-      - run: |
-          set -euo pipefail
-          brew install cloudcons/tap/deconflict
-          deconflict version | tee /dev/stderr | grep -qx "deconflict ${TAG#v}"
-
+  # Install the way a user would, in a clean container, and check the version
+  # that comes back is the one just released.
   verify-packages:
     needs: cloudsmith
     if: needs.cloudsmith.outputs.published == 'true'
