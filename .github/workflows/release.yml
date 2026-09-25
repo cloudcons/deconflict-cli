@@ -39,7 +39,7 @@ permissions:
 
 env:
   TAG: ${{ inputs.tag || github.ref_name }}
-  CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO || 'cloudops/deconflict' }}
+  CLOUDSMITH_REPO: ${{ vars.CLOUDSMITH_REPO || 'cloudcons/deconflict' }}
 
 jobs:
   release:
