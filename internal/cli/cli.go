@@ -78,6 +78,9 @@ Everything else
                                              hooks + skill, for the agents you run
   deconflict uninstall [--agent …] [--scope …] [--dry-run]
                                              take out only what install put in
+  deconflict update  [--check] [--dry-run] [--version X.Y.Z]
+                                             upgrade through whatever installed it, then
+                                             refresh the skills, hooks and MCP entries
   deconflict hook    <session-start|pre-tool|user-prompt>
   deconflict version
 
@@ -134,6 +137,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdHook(rest, stdout)
 	case "install":
 		err = cmdInstall(rest, stdout)
+	case "update", "upgrade":
+		err = cmdUpdate(rest, stdout, stderr)
 	case "uninstall":
 		err = cmdUninstall(rest, stdout)
 	case "login":
