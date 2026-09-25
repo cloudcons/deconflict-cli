@@ -74,12 +74,28 @@ That writes session-start and pre-tool hooks, an MCP server entry, and a skill
 describing how to use them. `--dry-run` shows every change first, and nothing is
 written outside your own agent configuration.
 
+It edits files other tools own, so it only ever changes its own entries. Other
+hooks, MCP servers, comments and key order are left as they were. If a file is
+in a shape it cannot edit with certainty, such as unparseable JSON, an inline
+`[mcp_servers]` table, or unbalanced markers, it writes nothing at all. Instead
+it prints exactly what to add by hand. Before changing an existing file, it
+saves the previous version beside it as `<name>.deconflict.bak`.
+
 The skill goes to `.claude/skills/deconflict/` for Claude Code and to
-`.agents/skills/deconflict/` for Codex. With `--scope user` it goes under your
-home directory instead. The skill ships inside the binary, so upgrading the
-client does not change the copy already on disk. Each copy is stamped with the
-version and revision of the text that wrote it, and the session-start hook
-names any copy that is out of date, along with the command that refreshes it.
+`.agents/skills/deconflict/` for Codex. With `--scope user`, everything goes
+under your home directory and nothing into the current one. That includes the
+MCP entry in `~/.claude.json` and the rule in `~/.claude/CLAUDE.md` or
+`~/.codex/AGENTS.md`.
+
+The skill ships inside the binary, so upgrading the client does not change the
+copy already on disk. Each copy is stamped with the version and revision of the
+text that wrote it. The session-start hook names any copy that is out of date,
+along with the command that refreshes it. Re-running `deconflict install` after
+an upgrade refreshes the skill, hooks, MCP entry and rule together.
+
+`deconflict uninstall` takes the same flags and removes only what install put
+in. It leaves a skill you have edited in place, and it leaves Codex's
+`codex_hooks` switch on, because other tools' hooks depend on it too.
 
 ## Use
 

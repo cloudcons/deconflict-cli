@@ -76,6 +76,8 @@ Everything else
   deconflict settings [--json]               what the operator has configured
   deconflict install [--agent claude|codex|all] [--scope project|user] [--dry-run]
                                              hooks + skill, for the agents you run
+  deconflict uninstall [--agent …] [--scope …] [--dry-run]
+                                             take out only what install put in
   deconflict hook    <session-start|pre-tool|user-prompt>
   deconflict version
 
@@ -132,6 +134,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		err = cmdHook(rest, stdout)
 	case "install":
 		err = cmdInstall(rest, stdout)
+	case "uninstall":
+		err = cmdUninstall(rest, stdout)
 	case "login":
 		err = cmdLogin(rest, stdout)
 	case "logout":
