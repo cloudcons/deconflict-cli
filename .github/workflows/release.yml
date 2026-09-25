@@ -13,6 +13,14 @@ name: release
 # with a warning rather than failing the release; once it exists, dispatch this
 # workflow from main with the tag to publish that release without rebuilding.
 #
+# CLOUDSMITH_API_KEY is a copy. The original lives in Infisical (project
+# homelab-qo-f8, env prod, /deconflict/ci), which runners cannot reach because
+# it is LAN-only. Rotate it there, then copy it across from a LAN machine:
+#
+#   infisical secrets get CLOUDSMITH_API_KEY --env prod --path /deconflict/ci \
+#     --projectId <homelab-qo-f8> --plain --silent \
+#     | gh secret set CLOUDSMITH_API_KEY -R cloudcons/deconflict-cli
+#
 # Homebrew is not pushed from here. cloudcons/homebrew-tap polls for the latest
 # release and regenerates its formula with packaging/homebrew.sh, so this
 # repository holds no credential for the tap.

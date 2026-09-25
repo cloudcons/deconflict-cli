@@ -60,6 +60,9 @@ $ go install github.com/cloudcons/deconflict-cli/cmd/deconflict@latest
 Every [release](https://github.com/cloudcons/deconflict-cli/releases) also
 carries the archives, `.deb` and `.rpm` files and their checksums directly.
 
+Package repository hosting is graciously provided by
+[Cloudsmith](https://cloudsmith.com), free for open-source projects.
+
 Then wire it into the agents you run:
 
 ```console
