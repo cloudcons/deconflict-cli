@@ -258,7 +258,7 @@ func TestSelfUpdateRefusesABadChecksum(t *testing.T) {
 	archive := tarGz(t, "deconflict", []byte("tampered"))
 	gh := &fakeGitHub{latest: "v0.1.9", files: map[string][]byte{
 		"v0.1.9/deconflict_0.1.9_linux_amd64.tar.gz": archive,
-		"v0.1.9/SHA256SUMS": []byte(sumLine("deconflict_0.1.9_linux_amd64.tar.gz", []byte("the real one"))),
+		"v0.1.9/SHA256SUMS":                          []byte(sumLine("deconflict_0.1.9_linux_amd64.tar.gz", []byte("the real one"))),
 	}}
 	gh.start(t)
 	dir := t.TempDir()
