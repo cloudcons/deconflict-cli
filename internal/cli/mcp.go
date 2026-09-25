@@ -108,7 +108,7 @@ func mcpTools() []mcpTool {
 		{Name: "cooler_act", Description: "Move a need, or retract a note. accept (author picks an offer), take (a need whose author is absent), renew (extend your lease), release (give it back), done (outcome succeeded or failed, with a summary in body and evidence — a failure returns the need to the board), cancel (author withdraws it), retract (a note). Taking a need assigns work; it never grants access to claimed code.", InputSchema: objectSchema([]string{"agent_id", "post_id", "step"}, map[string]any{"agent_id": str("Acting agent"), "post_id": str("The need or note"), "step": map[string]any{"type": "string", "enum": []string{"accept", "take", "renew", "release", "done", "cancel", "retract"}}, "offer_id": str("accept: the offer"), "body": str("What happened, or why; required for done"), "outcome": map[string]any{"type": "string", "enum": []string{"succeeded", "failed"}}, "evidence": str("done: commits, test runs"), "ttl": str("accept, take, renew: lease")})},
 		{Name: "cooler_read", Description: "Read the watercooler: a thread in full (post_id), a room's threads most recently active first (room), or the rooms themselves (neither).", InputSchema: objectSchema([]string{}, map[string]any{"agent_id": str("Marks which rooms you are in"), "room": str("Room to list"), "post_id": str("Thread to read")})},
 		{Name: "cooler_roll", Description: "Roll call for a room: each member, whether present, its latest status, the needs it holds, and its open questions.", InputSchema: objectSchema([]string{"room"}, map[string]any{"room": str("Room name")})},
-		{Name: "cooler_needs", Description: "The board: open and lapsed needs across every room in the organization — work other agents want taken.", InputSchema: objectSchema([]string{}, map[string]any{"all": map[string]any{"type": "boolean", "description": "Include taken, done and cancelled"}})},
+		{Name: "cooler_needs", Description: "The board: open and lapsed needs across every room in the organization — work other agents want taken.", InputSchema: objectSchema([]string{}, map[string]any{"all": map[string]any{"type": "boolean", "description": "Include taken, done and cancelled"}, "repo": str("Only needs in this repository"), "paths": strList("Only needs whose paths overlap these globs")})},
 		{Name: "cooler_notes", Description: "Active heads-ups, optionally only those about the paths you are about to touch. Check before starting work on unfamiliar ground.", InputSchema: objectSchema([]string{}, map[string]any{"room": str("Only this room"), "repo": str("Repository the paths are in"), "paths": strList("Globs you are about to touch")})},
 		{Name: "accept_proposal", Description: "Accept the current proposal for a participating autonomous agent. Delivery acknowledgement alone never performs this action.", InputSchema: objectSchema([]string{"negotiation_id", "agent_id"}, map[string]any{"negotiation_id": str("Negotiation identifier"), "agent_id": str("Participating agent identity")})},
 	}
@@ -282,13 +282,8 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 		err = h.JSON(http.MethodGet, roomPath(stringArg("room"), "/roll"), nil, &result)
 		value = result
 	case "cooler_needs":
-		path := "/v1/needs"
-		if all, _ := call.Arguments["all"].(bool); all {
-			path += "?all=1"
-		}
-		var result []protocol.Post
-		err = h.JSON(http.MethodGet, path, nil, &result)
-		value = result
+		all, _ := call.Arguments["all"].(bool)
+		value, err = fetchNeeds(h, all, stringArg("repo"), listArg("paths"))
 	case "cooler_notes":
 		value, err = fetchNotes(h, stringArg("room"), stringArg("repo"), listArg("paths"))
 	case "accept_proposal":

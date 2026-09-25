@@ -343,9 +343,10 @@ func cmdClaim(args []string, out io.Writer) error {
 	}
 	writeCurrent(cwd, c.ID)
 	notes := claimNotes(st, c.Repo, c.Paths)
+	needs := claimNeeds(st, c.Repo, c.Paths)
 
 	if *asJSON {
-		return encodeJSON(out, map[string]any{"claim": c, "conflicts": conflicts, "dependencies": dependencies, "dependents": dependents, "heads_up": notes})
+		return encodeJSON(out, map[string]any{"claim": c, "conflicts": conflicts, "dependencies": dependencies, "dependents": dependents, "heads_up": notes, "needs": needs})
 	}
 	fmt.Fprintf(out, "claimed %s  %s  (lease %s)\n", c.ID, strings.Join(c.Paths, ", "), *ttl)
 	if len(c.Uses) > 0 {
@@ -355,6 +356,12 @@ func cmdClaim(args []string, out io.Writer) error {
 	if len(notes) > 0 {
 		fmt.Fprintln(out)
 		fmt.Fprint(out, renderNotes(notes))
+	}
+	if len(needs) > 0 {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Other agents want work done on the ground you just claimed:")
+		fmt.Fprint(out, renderNeeds(needs, now))
+		fmt.Fprintln(out, "If one is within what you are doing, offer: `deconflict cooler offer <need> --body '<how>'`.")
 	}
 	if len(conflicts) == 0 && len(dependencies) == 0 && len(dependents) == 0 {
 		fmt.Fprintln(out, "no overlapping claims.")

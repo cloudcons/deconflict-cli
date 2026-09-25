@@ -47,7 +47,7 @@ lobby, whose members are every agent present. Posting in a room joins it.
   read <room> [--limit 50]            the room's threads, most recently active first
   thread <post>                       one thread, in full
   roll <room>                         each member: present?, status, needs held, open questions
-  needs [--all]                       the board: open and lapsed needs across every room
+  needs [--all] [--repo] [--paths]    the board: open and lapsed needs across every room
   notes [--room] [--repo] [--paths]   active heads-ups, for ground you are about to touch
 
 --to takes agent ids and @room, @all, @delegator, @runtime:<name>,
@@ -522,16 +522,19 @@ func coolerRoll(args []string, out io.Writer) error {
 func coolerNeeds(args []string, out io.Writer) error {
 	f := newCoolerFlags("needs")
 	all := f.fs.Bool("all", false, "include taken, done and cancelled needs")
+	repo := f.fs.String("repo", "", "only needs in this repository (default with --paths: this one)")
+	paths := f.fs.String("paths", "", "only needs whose paths overlap these comma-separated globs")
 	_, h, err := f.parse(args, "")
 	if err != nil {
 		return err
 	}
-	path := "/v1/needs"
-	if *all {
-		path += "?all=1"
+	ps := splitList(*paths)
+	if len(ps) > 0 && *repo == "" {
+		cwd, _ := os.Getwd()
+		*repo = gitinfo.Repo(cwd)
 	}
-	var needs []protocol.Post
-	if err := h.JSON(http.MethodGet, path, nil, &needs); err != nil {
+	needs, err := fetchNeeds(h, *all, *repo, ps)
+	if err != nil {
 		return err
 	}
 	if *f.asJSON {
@@ -573,6 +576,86 @@ func coolerNotes(args []string, out io.Writer) error {
 	}
 	fmt.Fprint(out, renderNotes(notes))
 	return nil
+}
+
+// fetchNeeds is the board, narrowed to the ground given. A registry older than
+// that narrowing ignores it and answers with the whole board, so it is applied
+// here as well: an agent told about work in a repository it is not in learns
+// to skip the list.
+func fetchNeeds(h *client.HTTPStore, all bool, repo string, paths []string) ([]protocol.Post, error) {
+	q := url.Values{}
+	if all {
+		q.Set("all", "1")
+	}
+	if repo != "" {
+		q.Set("repo", repo)
+	}
+	for _, p := range paths {
+		q.Add("path", p)
+	}
+	var needs []protocol.Post
+	if err := h.JSON(http.MethodGet, "/v1/needs?"+q.Encode(), nil, &needs); err != nil {
+		return nil, err
+	}
+	query := claim.NormalizeAll(paths)
+	out := []protocol.Post{}
+	for _, n := range needs {
+		if aboutGround(n, repo, query) {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}
+
+// aboutGround is the registry's rule for whether a post is about the ground
+// asked for. With paths, the post must name overlapping ones; with only a
+// repository, it must be scoped to that repository. A post that names no
+// repository is not evidence that it is somewhere else, so it matches any
+// when paths are asked for.
+func aboutGround(p protocol.Post, repo string, query []string) bool {
+	repo = strings.TrimSpace(repo)
+	if len(query) == 0 {
+		return repo == "" || strings.EqualFold(p.Repo, repo)
+	}
+	if len(p.Paths) == 0 || (repo != "" && p.Repo != "" && !strings.EqualFold(p.Repo, repo)) {
+		return false
+	}
+	return len(claim.PatternsOverlap(query, p.Paths)) > 0
+}
+
+// renderNeeds is the needs an agent is being shown unasked, with where each
+// one is, so it can tell whether the work is within reach.
+func renderNeeds(needs []protocol.Post, now time.Time) string {
+	var b strings.Builder
+	for _, n := range needs {
+		fmt.Fprintln(&b, "  "+postLine(n, now))
+		if len(n.Paths) > 0 {
+			fmt.Fprintf(&b, "      in %s:%s\n", n.Repo, strings.Join(n.Paths, ", "))
+		}
+	}
+	return b.String()
+}
+
+// claimNeeds is the open needs on ground just claimed. The agent that has
+// claimed the ground is often the one best placed to do the work somebody
+// asked for there, and nobody else would think to tell it.
+func claimNeeds(st client.Store, repo string, paths []string) []protocol.Post {
+	h, ok := st.(*client.HTTPStore)
+	if !ok {
+		return nil
+	}
+	needs, err := fetchNeeds(h, false, repo, paths)
+	if err != nil {
+		return nil
+	}
+	me := agentID()
+	out := needs[:0]
+	for _, n := range needs {
+		if n.AgentID != me {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 func fetchNotes(h *client.HTTPStore, room, repo string, paths []string) ([]protocol.Post, error) {
