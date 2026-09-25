@@ -90,6 +90,12 @@ func cmdHook(args []string, out io.Writer) error {
 				}
 				text += stale
 			}
+			if update := updateContext(time.Now()); update != "" {
+				if text != "" {
+					text += "\n\n"
+				}
+				text += update
+			}
 		}
 	case "pre-tool":
 		text = preToolContext(*dsn, cwd, in)

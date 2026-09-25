@@ -118,6 +118,9 @@ main() {
 
 	tar -xzf "$tmp/$name.tar.gz" -C "$tmp" deconflict
 
+	upgraded=false
+	[ -e "$dir/deconflict" ] && upgraded=true
+
 	mkdir -p "$dir" 2>/dev/null || die "cannot create $dir; pick another with --dir"
 	[ -w "$dir" ] || die "$dir is not writable; rerun with sudo or pick another with --dir"
 	# Write beside the target and rename, so a running deconflict (an agent's
@@ -131,7 +134,12 @@ main() {
 	*":$dir:"*) ;;
 	*) say "$dir is not on your PATH; add it to your shell profile" ;;
 	esac
-	say "next: deconflict install --agent all"
+	if [ "$upgraded" = true ]; then
+		# The skill, hooks and MCP entries on disk were written by the old binary.
+		say "next: deconflict update  (refreshes the skills, hooks and MCP entries already installed)"
+	else
+		say "next: deconflict install --agent all"
+	fi
 }
 
 main "$@"

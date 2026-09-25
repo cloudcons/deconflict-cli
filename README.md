@@ -90,8 +90,17 @@ MCP entry in `~/.claude.json` and the rule in `~/.claude/CLAUDE.md` or
 The skill ships inside the binary, so upgrading the client does not change the
 copy already on disk. Each copy is stamped with the version and revision of the
 text that wrote it. The session-start hook names any copy that is out of date,
-along with the command that refreshes it. Re-running `deconflict install` after
-an upgrade refreshes the skill, hooks, MCP entry and rule together.
+along with the command that refreshes it.
+
+Upgrading: `deconflict update` upgrades through whatever installed it, then
+refreshes skills, hooks and MCP entries. It runs `brew upgrade` for Homebrew,
+apt or dnf for the packages, and `go install` for a Go build. It replaces the
+binary itself, checked against the release's `SHA256SUMS`, for the install
+scripts. Then the new binary re-runs `install` with the same choices for each
+place it finds deconflict installed: this repository, and your home directory.
+`--check` only reports, exiting 10 when a newer release exists, and `--dry-run`
+changes nothing. The session-start hook mentions a newer release at most once a
+day. Set `DECONFLICT_NO_UPDATE_CHECK=1` to stop that check.
 
 `deconflict uninstall` takes the same flags and removes only what install put
 in. It leaves a skill you have edited in place, and it leaves Codex's
