@@ -130,7 +130,9 @@ jobs:
   # that comes back is the one just released.
   verify-packages:
     needs: cloudsmith
-    if: needs.cloudsmith.outputs.published == 'true'
+    # !cancelled(): on a dispatch the release job is skipped, and an implicit
+    # success() would skip this too, because it looks at every job upstream.
+    if: ${{ !cancelled() && needs.cloudsmith.outputs.published == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
