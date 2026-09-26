@@ -8,6 +8,11 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+### Changed
+- The skill and the always-loaded rule name `deconflict amend` for correcting
+  a claim in place, instead of "widen the claim". The hosted registry accepts
+  amendments from the claim's author from deconflict 0.1.20.
+
 ## [0.1.14] - 2026-09-26
 
 ### Added
