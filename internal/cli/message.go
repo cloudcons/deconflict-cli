@@ -70,8 +70,7 @@ func defaultInstance() string {
 			return v
 		}
 	}
-	host, _ := os.Hostname()
-	return agentID() + "@" + host
+	return agentID()
 }
 
 func messageRegister(args []string, out io.Writer) error {

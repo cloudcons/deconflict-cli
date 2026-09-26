@@ -106,6 +106,13 @@ day. Set `DECONFLICT_NO_UPDATE_CHECK=1` to stop that check.
 in. It leaves a skill you have edited in place, and it leaves Codex's
 `codex_hooks` switch on, because other tools' hooks depend on it too.
 
+Each agent is named `user@host/<worktree>/<runtime>` by default, such as
+`dragos@laptop/fix-login/claude`, so sessions working side by side in
+different worktrees, or Claude Code and Codex in the same one, are different
+agents. Set `DECONFLICT_AGENT` to choose the name yourself, and
+`DECONFLICT_RUNTIME` when the runtime is not detected (it shows up as the
+name ending at the worktree).
+
 ## Use
 
 ```console

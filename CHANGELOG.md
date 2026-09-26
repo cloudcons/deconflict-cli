@@ -8,6 +8,15 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.12] - 2026-09-26
+
+### Changed
+- The default agent id is `user@host/<worktree>/<runtime>` rather than
+  `user@host`. Every session on a machine used to be the same agent, so where
+  sessions shared a Unix user, one could not resolve another's question and
+  none received another's watercooler posts. `DECONFLICT_AGENT` still
+  overrides it. Claims, locks and mail made under the old id keep that id.
+
 ## [0.1.11] - 2026-09-26
 
 ### Added
@@ -97,7 +106,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.11...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.12...HEAD
+[0.1.12]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.8...v0.1.9
