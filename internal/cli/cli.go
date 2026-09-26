@@ -228,6 +228,20 @@ func splitList(s string) []string {
 	return out
 }
 
+// agentID is who this process acts as, unless DECONFLICT_AGENT says otherwise.
+//
+// The default is user@host/<worktree>/<runtime>. It was user@host, which named
+// every session on a machine the same agent: on a client VM where each session
+// ran as the same Unix user, one session could not settle another's question
+// (the registry saw an agent answering itself), and a watercooler post never
+// reached the other sessions because nobody is delivered their own posts.
+//
+// The worktree is what separates agents working side by side, and unlike a
+// session id it survives a restart, so the claims, mailbox and questions an
+// agent leaves behind are still its own when it comes back. The runtime is
+// there because Claude Code and Codex may share a worktree. Both parts are
+// read the same way from a hook and from a command the agent runs, which is
+// what keeps the identity a hook registers equal to the one the agent uses.
 func agentID() string {
 	if v := os.Getenv("DECONFLICT_AGENT"); v != "" {
 		return v
@@ -240,7 +254,19 @@ func agentID() string {
 	if user == "" {
 		user = "unknown"
 	}
-	return user + "@" + host
+	id := user + "@" + host
+	cwd, _ := os.Getwd()
+	if root := gitinfo.Root(cwd); root != "" {
+		id += "/" + filepath.Base(root)
+	}
+	switch rt := runtimeName(); rt {
+	case "agent":
+	case "claude-code":
+		id += "/claude"
+	default:
+		id += "/" + rt
+	}
+	return id
 }
 
 // currentPath is where this worktree remembers its own claim id, so release

@@ -8,6 +8,13 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+### Changed
+- The default agent id is `user@host/<worktree>/<runtime>` rather than
+  `user@host`. Every session on a machine used to be the same agent, so where
+  sessions shared a Unix user, one could not resolve another's question and
+  none received another's watercooler posts. `DECONFLICT_AGENT` still
+  overrides it. Claims, locks and mail made under the old id keep that id.
+
 ## [0.1.11] - 2026-09-26
 
 ### Added
