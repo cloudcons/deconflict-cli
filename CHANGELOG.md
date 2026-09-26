@@ -8,6 +8,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-09-26
+
 ### Added
 - Contributor, security and conduct documents, and issue and pull request
   templates.
@@ -94,7 +96,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.11...HEAD
+[0.1.11]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.7...v0.1.8
