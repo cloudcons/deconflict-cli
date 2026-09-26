@@ -25,6 +25,7 @@ const negotiateUsage = `deconflict negotiate — coordination protocol for auton
   checkpoint  publish checkpoint evidence
   recover     enter the negotiated recovery procedure
   deviate     report that the agreement no longer matches the work, and reopen it
+  invite      bring another agent in, while the terms are open
   ask         put a question to the other agents that is not yours to decide
   resolve     settle another agent's question from what you already know
   defer       hand a question up to the humans, when it is not the agents' to settle
@@ -57,6 +58,8 @@ func cmdNegotiate(args []string, out io.Writer) error {
 		return negotiateRecover(args[1:], out)
 	case "deviate":
 		return negotiateDeviate(args[1:], out)
+	case "invite":
+		return negotiateInvite(args[1:], out)
 	case "ask":
 		return negotiateAsk(args[1:], out)
 	case "answer":
@@ -203,6 +206,27 @@ func negotiatePropose(args []string, out io.Writer) error {
 func negotiateAccept(args []string, out io.Writer) error {
 	return simpleAgentMutation("accept", args, out)
 }
+
+// negotiateInvite brings an agent into a negotiation it was not pulled into.
+//
+// Participants come from claim overlap, and the agent holding the answer is
+// often not standing on the same paths — so its questions never reached it.
+// It must have registered: whose agent it is comes from the registry.
+func negotiateInvite(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate invite", flag.ContinueOnError)
+	agent := fs.String("agent", agentID(), "delegated agent id (a participant)")
+	participant := fs.String("participant", "", "the agent id to bring in")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" || strings.TrimSpace(*participant) == "" {
+		return fmt.Errorf("negotiation id and --participant are required")
+	}
+	return protocolMutation(*dsn, id, "participants", protocol.InviteInput{AgentID: *agent, Participant: *participant}, out)
+}
+
 func negotiateComplete(args []string, out io.Writer) error {
 	return simpleAgentMutation("complete", args, out)
 }

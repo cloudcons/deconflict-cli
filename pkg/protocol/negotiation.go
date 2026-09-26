@@ -189,6 +189,14 @@ type DeviationInput struct {
 	Reason       string `json:"reason"`
 }
 
+// InviteInput adds an agent to a negotiation already under way. AgentID is the
+// participant doing the adding; the registry decides whose agent Participant
+// is, from its registration.
+type InviteInput struct {
+	AgentID     string `json:"agent_id"`
+	Participant string `json:"participant"`
+}
+
 // A Question is an agent asking a human something that was never the agents'
 // to settle.
 //

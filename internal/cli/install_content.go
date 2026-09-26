@@ -74,6 +74,8 @@ depends on who should hear it:
   mandate lets you do inside it — goes on the negotiation. It reaches the
   agents holding live claims in that repository, and a person only if one of
   you defers it. An agent without a live claim there never sees it.
+  If the agent that knows is not in the negotiation, bring it in first with
+  ` + "`deconflict negotiate invite '<negotiation-id>' --participant '<agent-id>'`" + `.
 
 ` + "```console" + `
 $ deconflict negotiate ask '<negotiation-id>' \
