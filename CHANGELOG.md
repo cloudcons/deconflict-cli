@@ -8,6 +8,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-09-26
+
 ### Added
 - A request refused because its agent id was never registered now registers
   that id and retries once, saying so on stderr. The id follows the worktree,
@@ -121,7 +123,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.12...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.13...HEAD
+[0.1.13]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.11...v0.1.12
 [0.1.11]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.10...v0.1.11
 [0.1.10]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.9...v0.1.10
