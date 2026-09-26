@@ -8,6 +8,21 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+### Added
+- A request refused because its agent id was never registered now registers
+  that id and retries once, saying so on stderr. The id follows the worktree,
+  so an agent that changed directory was refused on every post and read it as
+  presence lapsing. `pkg/client` gains `HTTPStore.OnUnregistered` and
+  `UnregisteredError`.
+
+### Changed
+- The skill says which question goes where: `cooler ask --to` for a particular
+  agent, `negotiate ask` for a negotiation, which reaches only agents holding
+  live claims in that repository. It adds that an agent id follows the worktree,
+  that the registry is the record and a direct message only the doorbell, that
+  findings go in as notes with paths and claims cite evidence, and that a lock's
+  reason states the constraint.
+
 ## [0.1.12] - 2026-09-26
 
 ### Changed

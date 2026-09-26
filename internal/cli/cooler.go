@@ -137,6 +137,9 @@ func (c coolerFlags) parse(args []string, usage string) (string, *client.HTTPSto
 		return "", nil, fmt.Errorf("usage: deconflict cooler %s", usage)
 	}
 	h, err := negotiationClient(*c.dsn)
+	if err == nil {
+		registerOnRefusal(h, *c.agent)
+	}
 	return arg, h, err
 }
 

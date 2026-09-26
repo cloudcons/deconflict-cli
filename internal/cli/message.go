@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/cloudcons/deconflict-cli/internal/gitinfo"
+	"github.com/cloudcons/deconflict-cli/pkg/client"
 	"github.com/cloudcons/deconflict-cli/pkg/protocol"
 )
 
@@ -73,6 +74,29 @@ func defaultInstance() string {
 	return agentID()
 }
 
+// registerOnRefusal makes the first request as a new agent id register it.
+//
+// An agent id follows the worktree the CLI runs in, so an agent that cds into
+// another worktree acts as an id its session hook never registered, and every
+// post is refused. One agent read that as presence lapsing and took up
+// re-registering before every post. The id is the caller's own, under its own
+// credential, so registering it is what the caller meant; stderr says so, so
+// the agent learns which id it is acting as.
+func registerOnRefusal(h *client.HTTPStore, agent string) {
+	h.OnUnregistered = func(plain *client.HTTPStore) error {
+		cwd, _ := os.Getwd()
+		in := protocol.RegisterInput{
+			AgentID: agent, Name: agent, Runtime: runtimeName(), InstanceID: defaultInstance(),
+			Repository: gitinfo.Repo(cwd), Capabilities: []string{"messaging", "negotiation"}, TTL: "5m",
+		}
+		if err := plain.JSON(http.MethodPost, "/v1/agents/register", in, nil); err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "deconflict: registered %s — the first request as this agent id (ids follow the worktree)\n", agent)
+		return nil
+	}
+}
+
 func messageRegister(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("message register", flag.ContinueOnError)
 	agent := fs.String("agent", agentID(), "stable autonomous agent id")
@@ -118,6 +142,7 @@ func messageSend(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	registerOnRefusal(h, *from)
 	in := protocol.SendInput{SenderAgentID: *from, Recipients: splitList(*to), Kind: *kind, NegotiationID: *negotiationID, Payload: map[string]any{"body": *body}, IdempotencyKey: *idempotency, TTL: *ttl}
 	var items []protocol.Message
 	if err = h.JSON(http.MethodPost, "/v1/messages", in, &items); err != nil {
@@ -139,6 +164,7 @@ func messageInbox(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	registerOnRefusal(h, *agent)
 	q := url.Values{"agent_id": {*agent}, "after": {strconv.FormatInt(*after, 10)}}
 	if *all {
 		q.Set("all", "1")
@@ -230,6 +256,7 @@ func messageAck(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	registerOnRefusal(h, *agent)
 	// One id keeps the single-delivery response it has always printed; asking
 	// for a batch is what produces a batch.
 	if len(ids) == 1 {
