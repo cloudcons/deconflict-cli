@@ -15,9 +15,10 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
   templates.
 
 ### Fixed
-- The `.deb` packages now declare their license in the machine-readable
-  `copyright` format and ship the full `LICENSE`, so package tools and
-  repository indexes can identify it as Apache-2.0.
+- The `.deb` packages now name their license: a machine-readable (DEP-5)
+  `copyright` file pointing at the system's copy of the Apache-2.0 text, and a
+  `License` control field, which is what package indexes such as Cloudsmith
+  read.
 
 ## [0.1.10] - 2026-09-25
 
