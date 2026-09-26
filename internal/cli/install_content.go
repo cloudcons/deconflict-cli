@@ -195,7 +195,16 @@ $ deconflict list --all
 
 Stay inside the claim. Touch only what the task needs — no opportunistic
 cleanup, reformatting or renames outside the area you claimed. If the work
-genuinely requires editing something outside it, widen the claim or say so.
+genuinely requires editing something outside it, amend the claim rather than
+releasing it and claiming again — the claim keeps its id, lease and history:
+
+` + "```console" + `
+$ deconflict amend --paths '<the area the work really covers>' --not '<globs>'
+` + "```" + `
+
+` + "`--paths`" + ` replaces the declared area, so a correction can be narrower too;
+` + "`--what`" + `, ` + "`--why`" + `, ` + "`--uses`" + ` and ` + "`--interface`" + ` restate those. Only you can amend
+your claim.
 
 Start from a fresh base. Most "another agent broke my fix" is a branch cut from
 yesterday.
@@ -322,7 +331,8 @@ $ deconflict claim --paths '<globs>' --what '<what>' --why '<why>' --not '<globs
 read, a pipeline you run (` + "`'<repo>:<glob>'`" + ` for another repository). It is the
 only way an agent changing that code hears about you.
 
-Claims are advisory — nothing is blocked or locked. An overlap is a
+If the work outgrows the claim, ` + "`deconflict amend --paths '<globs>'`" + ` corrects it in
+place. Claims are advisory — nothing is blocked or locked. An overlap is a
 conversation to have now rather than a merge conflict to have later. Release
 with ` + "`deconflict release --reason merged`" + ` when the work lands.
 
