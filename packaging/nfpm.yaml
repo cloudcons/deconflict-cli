@@ -26,12 +26,27 @@ contents:
     dst: /usr/bin/deconflict
     file_info:
       mode: 0755
+  # The rpm names its license in the License tag, from `license:` above, and
+  # carries the text as %license. A deb has no such field: tools and repository
+  # indexes (Cloudsmith included) read the license from
+  # /usr/share/doc/<pkg>/copyright in the machine-readable DEP-5 format, and a
+  # verbatim copy of the Apache text there identifies nothing. So the deb's
+  # copyright is DEP-5, naming Apache-2.0 and pointing at the full text in
+  # /usr/share/common-licenses, which every Debian-family system ships — the
+  # form lintian requires; it rejects the full Apache text in this file.
   - src: LICENSE
     dst: /usr/share/doc/deconflict/LICENSE
     packager: rpm
     type: license
-  - src: LICENSE
+  - src: packaging/debian-copyright
     dst: /usr/share/doc/deconflict/copyright
     packager: deb
   - src: NOTICE
     dst: /usr/share/doc/deconflict/NOTICE
+# Debian control files have no license field, so the copyright file above is
+# the standard carrier. Cloudsmith ignores it, though, and reads only a License
+# control field; without one it lists the deb as unlicensed while the rpm shows
+# Apache-2.0. The field costs a lintian warning (unknown-field), not an error.
+deb:
+  fields:
+    License: Apache-2.0

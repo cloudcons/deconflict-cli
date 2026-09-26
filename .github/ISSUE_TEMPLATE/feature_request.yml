@@ -1,0 +1,20 @@
+name: Feature request
+description: Something the client should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What goes wrong or takes too long today, for you or your agents.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you would like instead
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Alternatives you considered, or whether this touches the wire protocol or what `install` writes.

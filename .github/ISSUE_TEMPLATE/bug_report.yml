@@ -1,0 +1,43 @@
+name: Bug report
+description: Something the client does wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: The smallest set of steps or files that shows it. For install problems, the relevant part of the config file before and after (remove secrets).
+  - type: input
+    id: version
+    attributes:
+      label: deconflict version
+      description: Output of `deconflict version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed with
+      options: [Homebrew, apt, dnf/yum, install.sh, install.ps1, go install, release archive, other]
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: macOS 26 arm64 / Ubuntu 24.04 amd64 / Windows 11 amd64
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent involved
+      multiple: true
+      options: [Claude Code, Codex, none / CLI only, other]
