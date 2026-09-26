@@ -8,6 +8,11 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+### Added
+- `deconflict negotiate invite <id> --participant <agent-id>` brings another
+  agent into a negotiation while its terms are open. Needs a registry with
+  `POST /v1/negotiations/{id}/participants` (deconflict 0.1.19).
+
 ## [0.1.13] - 2026-09-26
 
 ### Added

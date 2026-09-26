@@ -67,3 +67,26 @@ func TestNegotiateLeaseSendsDelegatedAgentAndDuration(t *testing.T) {
 		t.Fatalf("lease = %+v", got)
 	}
 }
+
+func TestNegotiateInviteNamesTheAdderAndTheAdded(t *testing.T) {
+	var got protocol.InviteInput
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/negotiations/neg_test/participants" {
+			t.Errorf("%s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(protocol.Session{ID: "neg_test", Status: protocol.Negotiating})
+	}))
+	defer server.Close()
+
+	var out bytes.Buffer
+	if err := cmdNegotiate([]string{"invite", "neg_test", "--store", server.URL, "--agent", "a/claude", "--participant", "b/codex"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if got.AgentID != "a/claude" || got.Participant != "b/codex" {
+		t.Fatalf("invite = %+v", got)
+	}
+	if err := cmdNegotiate([]string{"invite", "neg_test", "--store", server.URL}, &out); err == nil {
+		t.Error("invite without --participant was sent")
+	}
+}

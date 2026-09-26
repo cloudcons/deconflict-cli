@@ -54,7 +54,7 @@ Shared resources (environments, databases, deploy slots)
 Agent coordination
   deconflict negotiate request --paths <glob,...> --objective <text>
   deconflict negotiate <list|show|propose|accept|checkpoint|recover|complete|plans>
-  deconflict negotiate <ask|resolve|defer|answer>
+  deconflict negotiate <invite|ask|resolve|defer|answer>
                                              negotiate access and commitments
   deconflict message <register|send|inbox|watch|ack|presence>
                                              interoperable agent mailbox
