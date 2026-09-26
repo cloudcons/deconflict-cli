@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,7 +18,23 @@ type HTTPStore struct {
 	Base   string
 	Token  string
 	Client *http.Client
+
+	// OnUnregistered, when set, runs once when the registry refuses a request
+	// because the acting agent id was never registered under this credential,
+	// and the request is then retried once. It gets a copy of the store with
+	// the hook cleared, so registering through it cannot recurse.
+	OnUnregistered func(*HTTPStore) error
 }
+
+// UnregisteredError is the registry refusing an agent id this credential
+// never registered. Presence lapsing does not cause it; acting under a new id
+// does — and the CLI derives ids from the worktree it runs in.
+type UnregisteredError struct{ msg string }
+
+func (e *UnregisteredError) Error() string { return e.msg }
+
+// unregisteredPrefix is the clause the registry leads that refusal with.
+const unregisteredPrefix = "register this autonomous agent"
 
 func (h *HTTPStore) Describe() string { return h.Base }
 
@@ -31,6 +48,22 @@ func (h *HTTPStore) client() *http.Client {
 }
 
 func (h *HTTPStore) do(method, path string, body any) ([]byte, error) {
+	b, err := h.send(method, path, body)
+	var unregistered *UnregisteredError
+	if h.OnUnregistered == nil || !errors.As(err, &unregistered) {
+		return b, err
+	}
+	plain := *h
+	plain.OnUnregistered = nil
+	if h.OnUnregistered(&plain) != nil {
+		// The refusal says what to do; a failed registration would only
+		// bury it.
+		return nil, err
+	}
+	return plain.send(method, path, body)
+}
+
+func (h *HTTPStore) send(method, path string, body any) ([]byte, error) {
 	var rdr io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -63,7 +96,11 @@ func (h *HTTPStore) do(method, path string, body any) ([]byte, error) {
 		case http.StatusUnauthorized:
 			return nil, fmt.Errorf("%s rejected this credential — run `deconflict login --server %s`", h.Base, h.Base)
 		case http.StatusForbidden:
-			return nil, fmt.Errorf("%s: %s", h.Base, bytes.TrimSpace(b))
+			msg := bytes.TrimSpace(b)
+			if bytes.HasPrefix(msg, []byte(unregisteredPrefix)) {
+				return nil, &UnregisteredError{fmt.Sprintf("%s: %s", h.Base, msg)}
+			}
+			return nil, fmt.Errorf("%s: %s", h.Base, msg)
 		}
 		return nil, fmt.Errorf("%s %s: %s: %s", method, path, resp.Status, bytes.TrimSpace(b))
 	}
