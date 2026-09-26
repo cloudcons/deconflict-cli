@@ -1,0 +1,10 @@
+# The module has no dependencies to update. The workflows' actions do.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

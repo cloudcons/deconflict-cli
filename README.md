@@ -175,6 +175,14 @@ than the registry it is talking to has to keep working.
 credential, so each belongs to the server binary rather than to a client anyone
 can install.
 
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers
+building, the rules this project keeps (no dependencies, a compatible wire
+contract, and never damaging other tools' configuration), and how releases
+work. Report security problems privately, as [SECURITY.md](SECURITY.md)
+describes. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
 ## Licence
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
