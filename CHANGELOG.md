@@ -8,6 +8,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-09-27
+
 ### Changed
 - The skill and the always-loaded rule name `deconflict amend` for correcting
   a claim in place, instead of "widen the claim". The hosted registry accepts
@@ -135,7 +137,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.14...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.15...HEAD
+[0.1.15]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.12...v0.1.13
 [0.1.12]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.11...v0.1.12
