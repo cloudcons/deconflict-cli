@@ -478,15 +478,24 @@ func hookBinary() string {
 // ---------- hooks ----------
 
 const (
-	claudeEditMatcher = "Edit|Write|NotebookEdit"
-	// Codex's carries Edit|Write as well as its own apply_patch, so one file
-	// serves a machine that runs both agents.
-	codexEditMatcher = "apply_patch|Edit|Write"
+	// Edits, and the shell: a commit or a push is the moment work leaves the
+	// worktree, which the pre-tool hook checks against the claim. Any other
+	// shell command returns before touching the network.
+	claudeEditMatcher = "Edit|Write|NotebookEdit|Bash"
+	// Codex's carries Edit|Write|Bash as well as its own apply_patch and shell,
+	// so one file serves a machine that runs both agents.
+	codexEditMatcher = "apply_patch|Edit|Write|Bash|shell|exec_command"
 )
 
+// hookVerbs are the boundaries the registry is put at. Session start and the
+// write were the only two, and an agent heard nothing between them; see
+// hook_turns.go for why each of the others exists.
 var hookVerbs = []struct{ event, verb string }{
 	{"SessionStart", "session-start"},
+	{"UserPromptSubmit", "user-prompt"},
 	{"PreToolUse", "pre-tool"},
+	{"PostToolUse", "post-tool"},
+	{"Stop", "stop"},
 }
 
 // shellWord quotes a path for a hook command line, which the agent hands to a
@@ -605,7 +614,7 @@ func childArray(o *jobj, key string) ([]any, bool, error) {
 // and Codex take the identical file shape and differ only in what they call an
 // edit.
 func (p *installPlan) hooks(path, bin, matcher string) {
-	const what = "session-start + pre-write hooks"
+	const what = "session, prompt, tool and stop hooks"
 	snippet := hookSnippet(bin, matcher)
 	f, err := p.file(path)
 	if err != nil {
@@ -650,7 +659,10 @@ func hookSnippet(bin, matcher string) string {
 	}
 	return `"hooks": {
   "SessionStart": [{"hooks": [` + entry("session-start") + `]}],
-  "PreToolUse": [{"matcher": "` + matcher + `", "hooks": [` + entry("pre-tool") + `]}]
+  "UserPromptSubmit": [{"hooks": [` + entry("user-prompt") + `]}],
+  "PreToolUse": [{"matcher": "` + matcher + `", "hooks": [` + entry("pre-tool") + `]}],
+  "PostToolUse": [{"hooks": [` + entry("post-tool") + `]}],
+  "Stop": [{"hooks": [` + entry("stop") + `]}]
 }`
 }
 
@@ -848,7 +860,10 @@ func untrustedCodexHooks(hooksPath, configPath string) []string {
 
 // codexEvents maps the hook event names we install to the snake_case form Codex
 // uses in its trust keys.
-var codexEvents = map[string]string{"SessionStart": "session_start", "PreToolUse": "pre_tool_use"}
+var codexEvents = map[string]string{
+	"SessionStart": "session_start", "UserPromptSubmit": "user_prompt_submit",
+	"PreToolUse": "pre_tool_use", "PostToolUse": "post_tool_use", "Stop": "stop",
+}
 
 // ---------- MCP ----------
 

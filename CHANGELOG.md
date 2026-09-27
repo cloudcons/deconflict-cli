@@ -8,6 +8,23 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+### Added
+- The registry reaches an agent between session start and its first write
+  into claimed ground. `deconflict install` now also registers:
+  - a prompt hook: new mail and newly seen claims, each once;
+  - a post-tool hook: new mail at most every two minutes, which also keeps
+    the agent present;
+  - a stop hook: before the agent finishes, questions put to it, unacknowledged
+    mail, and a claim whose branch landed or that the work outgrew. Each is
+    raised once, then the agent is let go.
+- The pre-tool hook sees the shell: a `git commit` or `git push` with no claim,
+  or carrying files outside it, is said once. Other commands cost nothing.
+- The first write in a repository this agent has no claim in says so, once.
+
+### Changed
+- Mail is shown once per session instead of in full at every boundary. Session
+  start still shows everything.
+
 ## [0.1.15] - 2026-09-27
 
 ### Changed

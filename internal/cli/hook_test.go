@@ -26,6 +26,10 @@ type hookRepo struct {
 func newHookRepo(t *testing.T) *hookRepo {
 	t.Helper()
 	root := t.TempDir()
+	// What a session has been told is kept under the temp directory. Give
+	// each test its own, or a second run of the suite finds every session
+	// already told and every "first time" assertion fails.
+	t.Setenv("TMPDIR", t.TempDir())
 	h := &hookRepo{
 		t:     t,
 		dsn:   "file:" + filepath.Join(root, "client.json"),
@@ -131,14 +135,22 @@ func TestOneClaimWarnsOnceThenBriefly(t *testing.T) {
 	}
 }
 
-// An unclaimed file must cost nothing at all: the quiet case is the common case,
-// and a hook that always says something is a hook people turn off.
+// A file nobody else claimed costs almost nothing: the quiet case is the common
+// case, and a hook that always says something is a hook people turn off. The
+// one thing said is, once per repository per session, that this agent itself
+// has announced nothing — unannounced work was otherwise silent to the merge.
 func TestUnclaimedFileIsSilent(t *testing.T) {
 	h := newHookRepo(t)
 	h.claimAs("other-agent", "src/auth/**")
 
-	if got := h.preTool("s", "src/billing/invoice.go"); got != "" {
-		t.Errorf("unclaimed file produced output: %q", got)
+	first := h.preTool("s", "src/billing/invoice.go")
+	if !strings.Contains(first, "without a claim") || strings.Contains(first, "another agent has claimed") {
+		t.Errorf("first unclaimed write should say only that this agent has no claim, got %q", first)
+	}
+	for _, f := range []string{"src/billing/invoice.go", "src/billing/tax.go"} {
+		if got := h.preTool("s", f); got != "" {
+			t.Errorf("%s: said it again: %q", f, got)
+		}
 	}
 }
 
@@ -179,7 +191,7 @@ func TestMailboxDeliveryNeverAcknowledges(t *testing.T) {
 	t.Setenv("DECONFLICT_TOKEN", "test-agent-token")
 	t.Setenv("DECONFLICT_AGENT", "bo/claude")
 
-	got := mailboxContext(server.URL, t.TempDir(), hookInput{SessionID: "s1"})
+	got := mailboxContext(server.URL, t.TempDir(), hookInput{SessionID: "s1"}, true)
 
 	if len(acked) != 0 {
 		t.Errorf("hook acknowledged %v; delivery is the registry's fact, acknowledgement is the agent's", acked)
