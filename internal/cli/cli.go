@@ -724,6 +724,30 @@ func cmdAmend(args []string, out io.Writer) error {
 	return nil
 }
 
+// changedOutside is what this worktree has touched since the claim was made,
+// and which of those files fall outside the claim's paths. Shared by status,
+// the commit check and the stop check, so all three draw the same line.
+func changedOutside(cwd string, c claim.Claim, base string) (changed, outside []string) {
+	since := base
+	if c.HeadSHA != "" && gitinfo.Resolves(cwd, c.HeadSHA) {
+		since = c.HeadSHA
+	}
+	changed = gitinfo.ChangedPaths(cwd, since)
+	for _, f := range changed {
+		hit := false
+		for _, p := range c.Paths {
+			if claim.Match(p, f) {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			outside = append(outside, f)
+		}
+	}
+	return changed, outside
+}
+
 // cmdStatus reports my claim with progress derived from git rather than from
 // anything the agent said about itself.
 func cmdStatus(args []string, out io.Writer) error {
@@ -761,11 +785,7 @@ func cmdStatus(args []string, out io.Writer) error {
 	// is exactly the question being asked — what have I touched since I said
 	// what I would touch. Falls back to the base for claims made before this
 	// was recorded, and for a worktree where that commit no longer resolves.
-	since := base
-	if c.HeadSHA != "" && gitinfo.Resolves(cwd, c.HeadSHA) {
-		since = c.HeadSHA
-	}
-	changed := gitinfo.ChangedPaths(cwd, since)
+	changed, outside := changedOutside(cwd, c, base)
 	fmt.Fprintf(out, "claim %s  %s ago  lease %s left\n", c.ID, c.Age(now), c.TTL(now))
 	fmt.Fprintf(out, "  what:    %s\n", c.What)
 	fmt.Fprintf(out, "  claimed: %s\n", strings.Join(c.Paths, ", "))
@@ -774,19 +794,6 @@ func cmdStatus(args []string, out io.Writer) error {
 
 	// Files edited outside the declared area. Not an error — a prompt to widen
 	// the claim so the announcement keeps matching reality.
-	var outside []string
-	for _, f := range changed {
-		hit := false
-		for _, p := range c.Paths {
-			if claim.Match(p, f) {
-				hit = true
-				break
-			}
-		}
-		if !hit {
-			outside = append(outside, f)
-		}
-	}
 	if len(outside) > 0 {
 		fmt.Fprintf(out, "\n  %d changed file(s) fall OUTSIDE your claim:\n", len(outside))
 		for _, f := range outside {

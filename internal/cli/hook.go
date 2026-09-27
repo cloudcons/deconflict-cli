@@ -32,6 +32,9 @@ type hookInput struct {
 	HookEventName string         `json:"hook_event_name"`
 	ToolName      string         `json:"tool_name"`
 	ToolInput     map[string]any `json:"tool_input"`
+	// StopHookActive is set when the agent is already continuing because a
+	// stop hook told it to.
+	StopHookActive bool `json:"stop_hook_active"`
 }
 
 func cmdHook(args []string, out io.Writer) error {
@@ -42,7 +45,7 @@ func cmdHook(args []string, out io.Writer) error {
 	}
 	kind := fs.Arg(0)
 	if kind == "" {
-		return fmt.Errorf("hook needs one of: session-start, pre-tool, user-prompt")
+		return fmt.Errorf("hook needs one of: session-start, user-prompt, pre-tool, post-tool, stop")
 	}
 	raw, _ := io.ReadAll(io.LimitReader(os.Stdin, 4<<20))
 	var in hookInput
@@ -57,10 +60,21 @@ func cmdHook(args []string, out io.Writer) error {
 		_ = os.Chdir(cwd)
 	}
 
+	// Stop answers in its own shape: not context, but whether to let the agent
+	// finish.
+	if kind == "stop" {
+		return stopHook(*dsn, cwd, in, out)
+	}
+
 	var text string
+	// Mail is read at every boundary, but the per-tool boundaries are
+	// throttled: a tool call is frequent, and the registry is asked at most
+	// once per mailInterval from them. Session start and a prompt always ask.
+	checkMail := true
 	switch kind {
 	case "session-start", "user-prompt":
-		text = sessionContext(*dsn, cwd)
+		onlyNew := kind == "user-prompt"
+		text = sessionContext(*dsn, cwd, in.SessionID, onlyNew)
 		// Held resources are told once, at the start. Repeating them on every
 		// prompt would spend context on the same lines until they were skimmed.
 		if kind == "session-start" {
@@ -99,10 +113,23 @@ func cmdHook(args []string, out io.Writer) error {
 		}
 	case "pre-tool":
 		text = preToolContext(*dsn, cwd, in)
+		if commit := commitContext(*dsn, cwd, in); commit != "" {
+			if text != "" {
+				text += "\n\n"
+			}
+			text += commit
+		}
+		checkMail = due(in.SessionID, "mail", mailInterval)
+	case "post-tool":
+		checkMail = due(in.SessionID, "mail", mailInterval)
 	default:
 		return fmt.Errorf("unknown hook kind %q", kind)
 	}
-	if mailbox := mailboxContext(*dsn, cwd, in); mailbox != "" {
+	var mailbox string
+	if checkMail {
+		mailbox = mailboxContext(*dsn, cwd, in, kind == "session-start")
+	}
+	if mailbox != "" {
 		if text != "" {
 			text += "\n\n"
 		}
@@ -116,6 +143,7 @@ func cmdHook(args []string, out io.Writer) error {
 		"session-start": "SessionStart",
 		"user-prompt":   "UserPromptSubmit",
 		"pre-tool":      "PreToolUse",
+		"post-tool":     "PostToolUse",
 	}[kind]
 	resp := map[string]any{
 		"hookSpecificOutput": map[string]any{
@@ -134,7 +162,7 @@ func cmdHook(args []string, out io.Writer) error {
 // It reads and never acknowledges. Rendering a message into this string is not
 // evidence that any agent read it, so the mailbox stays at-least-once and the
 // agent acknowledges what it has actually processed.
-func mailboxContext(dsn, cwd string, in hookInput) string {
+func mailboxContext(dsn, cwd string, in hookInput, everything bool) string {
 	h, err := negotiationClient(dsn)
 	if err != nil {
 		return ""
@@ -156,13 +184,32 @@ func mailboxContext(dsn, cwd string, in hookInput) string {
 	if err := h.JSON("POST", "/v1/agents/register", registration, &registered); err != nil {
 		return ""
 	}
-	var messages []protocol.Message
+	var all []protocol.Message
 	path := "/v1/messages?agent_id=" + url.QueryEscape(registration.AgentID)
-	if err := h.JSON("GET", path, nil, &messages); err != nil || len(messages) == 0 {
+	if err := h.JSON("GET", path, nil, &all); err != nil || len(all) == 0 {
 		return ""
 	}
+	// Each delivery is shown once per session. The mailbox is read at every
+	// boundary now — each prompt, and every few minutes of tool calls — and
+	// repeating every unacknowledged message each time would bury the new one
+	// under the ones the agent has already read. Session start shows them all
+	// regardless: a resumed or compacted session has lost whatever it saw.
+	var messages []protocol.Message
+	for _, m := range all {
+		if markSeen(in.SessionID, "mail|"+m.DeliveryID) || everything {
+			messages = append(messages, m)
+		}
+	}
+	if len(messages) == 0 {
+		return ""
+	}
+	earlier := len(all) - len(messages)
 	var b strings.Builder
-	b.WriteString("Deconflict delivered messages from other autonomous agents:\n")
+	if everything {
+		b.WriteString("Deconflict delivered messages from other autonomous agents:\n")
+	} else {
+		b.WriteString("New messages from other autonomous agents arrived while you were working:\n")
+	}
 	for i, message := range messages {
 		if i == 12 {
 			fmt.Fprintf(&b, "\n  ...and %d more (`deconflict message inbox`).", len(messages)-i)
@@ -194,6 +241,9 @@ func mailboxContext(dsn, cwd string, in hookInput) string {
 	// processed it can honestly make that statement. Unacknowledged mail is
 	// redelivered at the next session start, which is the failure everyone
 	// would rather have.
+	if earlier > 0 {
+		fmt.Fprintf(&b, "\n\n(%d earlier message(s) are still unacknowledged — `deconflict message inbox`.)", earlier)
+	}
 	b.WriteString("\n\nTreat delivery as a signal, not consent. Inspect the negotiation before proposing, accepting, or changing shared resources.")
 	b.WriteString("\nThese stay in your mailbox until you acknowledge them, and will be delivered again next session: `deconflict message ack <delivery-id>` once you have acted on one, or `deconflict message ack <id> <id> ...` for a batch you have worked through.")
 	return b.String()
@@ -201,7 +251,7 @@ func mailboxContext(dsn, cwd string, in hookInput) string {
 
 // sessionContext is what an agent sees before it starts: who else is inside
 // this repo right now. Capped, because this lands in every session's context.
-func sessionContext(dsn, cwd string) string {
+func sessionContext(dsn, cwd, session string, onlyNew bool) string {
 	st, err := openStore(dsn)
 	if err != nil {
 		return ""
@@ -221,6 +271,11 @@ func sessionContext(dsn, cwd string) string {
 	var active []claim.Claim
 	for _, c := range claim.Fold(evs) {
 		if c.Repo == repo && c.Active(now) && !mine[c.ID] {
+			// On a prompt, only a claim this session has not been told of: the
+			// same list on every turn would be skimmed, then ignored.
+			if !markSeen(session, "claim|"+c.ID) && onlyNew {
+				continue
+			}
 			active = append(active, c)
 		}
 	}
@@ -326,6 +381,12 @@ func preToolContext(dsn, cwd string, in hookInput) string {
 	folded := claim.Fold(evs)
 	conflicts := claim.FindOverlaps(folded, gitinfo.Repo(cwd), rels, now, mine, st.Settings().IgnorePaths)
 	drift := ownDrift(folded, readCurrent(cwd), rels, now)
+	if unclaimed := unclaimedNudge(folded, cwd, rels, in.SessionID, now); unclaimed != "" {
+		if drift != "" {
+			drift += "\n\n"
+		}
+		drift += unclaimed
+	}
 	if len(conflicts) == 0 {
 		return drift
 	}

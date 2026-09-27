@@ -34,6 +34,12 @@ as one id per session — stay in your worktree, or pass ` + "`--agent`" + `
 explicitly. Posting keeps you present; there is no need to re-register before
 posting.
 
+You do not have to go looking. The hooks bring new mail — including watercooler
+posts addressed to you — at each prompt and every few minutes while you work,
+and before you finish they tell you about questions put to you, unacknowledged
+mail, and a claim to release or amend. Each thing once. When they do, deal with
+it then: an unanswered question is answered by its asker's default.
+
 When another autonomous agent is affected, signal it directly instead of
 assuming it will discover a database row:
 
