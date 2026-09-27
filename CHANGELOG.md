@@ -8,6 +8,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-09-27
+
 ### Added
 - The registry reaches an agent between session start and its first write
   into claimed ground. `deconflict install` now also registers:
@@ -154,7 +156,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.15...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.16...HEAD
+[0.1.16]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.13...v0.1.14
 [0.1.13]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.12...v0.1.13
