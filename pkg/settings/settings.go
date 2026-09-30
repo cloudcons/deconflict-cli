@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -97,7 +98,15 @@ type Settings struct {
 
 	// MaxLease caps what a client may ask for. A 30-day claim is not a claim.
 	MaxLease Duration `json:"max_lease"`
+
+	// ClientVersion is the client release this organization runs, e.g.
+	// "0.1.18". When set, every client updates itself to it at session start —
+	// forward or back — so one field is the whole rollout and the whole
+	// rollback. Empty leaves clients where they are.
+	ClientVersion string `json:"client_version,omitempty"`
 }
+
+var releaseVersion = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 
 // Defaults are deliberately unopinionated except where a wrong default would
 // quietly break the model: leases decay, and generated files never count.
@@ -131,6 +140,10 @@ func (s *Settings) Validate() error {
 	}
 	if s.StaleGrace < 0 {
 		return fmt.Errorf("stale grace cannot be negative")
+	}
+	s.ClientVersion = strings.TrimPrefix(strings.TrimSpace(s.ClientVersion), "v")
+	if s.ClientVersion != "" && !releaseVersion.MatchString(s.ClientVersion) {
+		return fmt.Errorf("client version must be a release like 0.1.18")
 	}
 	if s.WebhookURL != "" && !strings.HasPrefix(s.WebhookURL, "http://") && !strings.HasPrefix(s.WebhookURL, "https://") {
 		return fmt.Errorf("webhook url must be http(s)")
