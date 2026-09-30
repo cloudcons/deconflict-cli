@@ -1,8 +1,8 @@
 package claim
 
 import (
-	"testing"
 	"strings"
+	"testing"
 	"time"
 )
 
