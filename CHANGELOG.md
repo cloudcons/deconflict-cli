@@ -8,6 +8,19 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+### Added
+- Updates over the air, by organization. An organization sets the client
+  version it runs (`client_version` in its settings, deconflict 0.1.27), and
+  at session start every client that differs from it — ahead or behind —
+  updates itself to it in the background with `deconflict update --version`,
+  checked against the release's SHA256SUMS, then refreshes its hooks and
+  skills. The next session says it landed, or why it failed. Setting it back
+  is the rollback. `DECONFLICT_NO_AUTO_UPDATE=1` opts a machine out. With a
+  version approved, the "newer release available" nudge is not shown.
+- `deconflict update --auto` records its outcome for the next session.
+- Each agent's registration carries its client version, so an organization
+  can see a rollout land.
+
 ## [0.1.17] - 2026-09-30
 
 ### Added

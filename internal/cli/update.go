@@ -213,17 +213,25 @@ func goInstalled(e updateEnv) bool {
 	return false
 }
 
-func cmdUpdate(args []string, out, errOut io.Writer) error {
+func cmdUpdate(args []string, out, errOut io.Writer) (err error) {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	fs.SetOutput(errOut)
 	check := fs.Bool("check", false, "only say whether a newer release exists (exit 10 if one does)")
 	dry := fs.Bool("dry-run", false, "print what would be run, downloaded and rewritten; change nothing")
 	pin := fs.String("version", "", "install this version instead of the latest (e.g. 0.1.9)")
 	force := fs.Bool("force", false, "reinstall even if already current, or replace a development build")
+	auto := fs.Bool("auto", false, "run as the automatic update to the organization's version (records the outcome for the next session)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	current := clientVersion()
+	if *auto {
+		if *pin == "" {
+			return fmt.Errorf("--auto needs --version")
+		}
+		// The outcome is the next session's to report: nobody is watching this.
+		defer func() { finishAutoUpdate(strings.TrimPrefix(*pin, "v"), err) }()
+	}
 
 	var tag string
 	if *pin != "" {

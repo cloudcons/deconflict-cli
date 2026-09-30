@@ -104,7 +104,13 @@ func cmdHook(args []string, out io.Writer) error {
 				}
 				text += stale
 			}
-			if update := updateContext(time.Now()); update != "" {
+			// An organization that approved a client version gets updated to
+			// it, and is not told about releases beyond it.
+			update, pinned := autoUpdateContext(*dsn, time.Now())
+			if !pinned {
+				update = updateContext(time.Now())
+			}
+			if update != "" {
 				if text != "" {
 					text += "\n\n"
 				}
@@ -179,6 +185,8 @@ func mailboxContext(dsn, cwd string, in hookInput, everything bool) string {
 		Repository:   gitinfo.Repo(cwd),
 		Capabilities: []string{"messaging", "negotiation", "checkpoints"},
 		TTL:          "5m",
+		// What each agent runs, so an organization can see its rollout land.
+		Metadata: map[string]any{"client_version": clientVersion()},
 	}
 	var registered protocol.Registration
 	if err := h.JSON("POST", "/v1/agents/register", registration, &registered); err != nil {
