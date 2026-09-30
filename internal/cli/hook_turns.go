@@ -211,6 +211,27 @@ func stopHook(dsn, cwd string, in hookInput, out io.Writer) error {
 		}
 	}
 
+	if h, err := negotiationClient(dsn); err == nil {
+		var overlaps []struct {
+			ClaimID      string   `json:"claim_id"`
+			OtherAgent   string   `json:"other_agent"`
+			OtherClaimID string   `json:"other_claim_id"`
+			OtherWhat    string   `json:"other_what"`
+			Paths        []string `json:"paths"`
+		}
+		// Overlaps nobody spoke about. An older registry has no such route.
+		if err := h.JSON("GET", "/v1/agents/"+url.PathEscape(me)+"/overlaps", nil, &overlaps); err == nil {
+			for _, o := range overlaps {
+				if !markSeen(in.SessionID, "stop-overlap|"+o.OtherClaimID) {
+					continue
+				}
+				items = append(items, fmt.Sprintf("- Your claim %s overlaps %s's claim %s (%q) on %s, and neither of you has said a word to the other.\n"+
+					"  Tell them what you changed: `deconflict cooler say lobby --to '%s' --body '…'`, or `deconflict negotiate with %s` if it needs agreeing.",
+					o.ClaimID, o.OtherAgent, o.OtherClaimID, o.OtherWhat, strings.Join(o.Paths, ", "), o.OtherAgent, o.OtherClaimID))
+			}
+		}
+	}
+
 	if st, err := openStore(dsn); err == nil {
 		if evs, err := st.Events(); err == nil {
 			now := time.Now().UTC()

@@ -16,6 +16,7 @@ import (
 type registryStub struct {
 	mail      []map[string]any
 	questions []map[string]any
+	overlaps  []map[string]any
 	calls     int
 }
 
@@ -31,6 +32,8 @@ func (s *registryStub) serve(t *testing.T) string {
 			_ = json.NewEncoder(w).Encode(s.mail)
 		case strings.HasSuffix(r.URL.Path, "/questions"):
 			_ = json.NewEncoder(w).Encode(s.questions)
+		case strings.HasSuffix(r.URL.Path, "/overlaps"):
+			_ = json.NewEncoder(w).Encode(s.overlaps)
 		case r.URL.Path == "/v1/events":
 			_ = json.NewEncoder(w).Encode([]any{})
 		case r.URL.Path == "/v1/settings":
@@ -191,5 +194,29 @@ func TestInstallPutsTheRegistryAtEveryBoundary(t *testing.T) {
 	p := install(t, func(p *installPlan) { p.hooks(settings, "deconflict", claudeEditMatcher) })
 	if p.changes[0].action != "already set" {
 		t.Errorf("second install changed something: %s", p.changes[0].action)
+	}
+}
+
+// An overlap nobody spoke about is raised at finish, once, with both ways to
+// speak about it.
+func TestStopHookRaisesAnUnspokenOverlapOnce(t *testing.T) {
+	reg := &registryStub{overlaps: []map[string]any{{
+		"claim_id": "c-me", "other_agent": "ana/claude", "other_claim_id": "c-ana",
+		"other_what": "rework the contract", "paths": []string{"telemetry/contract.yaml"},
+	}}}
+	dsn := reg.serve(t)
+	in := hookInput{SessionID: "s"}
+	var out bytes.Buffer
+	if err := stopHook(dsn, t.TempDir(), in, &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"c-ana", "ana/claude", "telemetry/contract.yaml", "--to 'ana/claude'", "negotiate with c-ana"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("stop reason lacks %q: %s", want, out.String())
+		}
+	}
+	out.Reset()
+	if err := stopHook(dsn, t.TempDir(), in, &out); err != nil || out.Len() != 0 {
+		t.Fatalf("raised twice: %q", out.String())
 	}
 }

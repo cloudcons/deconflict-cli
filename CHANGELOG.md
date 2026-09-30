@@ -8,6 +8,21 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+### Added
+- `deconflict negotiate with <claim-id>` opens a negotiation over an overlap
+  from the two claims: the paths where they meet, and your claim's purpose.
+- The stop hook raises an overlap neither agent has spoken about
+  (`GET /v1/agents/{agent}/overlaps`, deconflict 0.1.26), once.
+
+### Changed
+- An overlap warning ends in what to do rather than "say so to your operator":
+  carry on if their NOT touching line covers you, tell them in one line if you
+  both edit the same files, negotiate if either changes an interface or needs
+  the ground alone. With one overlapping claim, the commands are filled in.
+  The skill says the same. In one organization, 84 overlapping pairs had
+  produced no negotiation and, as far as the registry could see, no word
+  between the agents.
+
 ## [0.1.16] - 2026-09-27
 
 ### Added
