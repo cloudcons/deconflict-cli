@@ -8,6 +8,15 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-09-30
+
+### Fixed
+- Refreshing the agent configuration — which `deconflict update`, and so
+  every automatic update, does — no longer rewrites a hook or MCP command
+  that already runs this binary under another name (an absolute path, a
+  symlink). Codex trusts a hook by a hash of its command, so the rewrite
+  silently switched off every Codex hook a person had approved.
+
 ## [0.1.18] - 2026-09-30
 
 ### Added
@@ -188,7 +197,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.15...v0.1.16
