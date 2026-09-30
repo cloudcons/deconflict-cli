@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -218,5 +219,42 @@ func TestStopHookRaisesAnUnspokenOverlapOnce(t *testing.T) {
 	out.Reset()
 	if err := stopHook(dsn, t.TempDir(), in, &out); err != nil || out.Len() != 0 {
 		t.Fatalf("raised twice: %q", out.String())
+	}
+}
+
+// Codex trusts a hook by a hash of its command. A refresh — which every
+// automatic update runs — must not rewrite a command that already runs this
+// binary by another name, or it revokes that trust without a word.
+func TestRefreshKeepsACommandThatAlreadyRunsThisBinary(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "opt", "deconflict")
+	link := filepath.Join(dir, "bin", "deconflict")
+	other := filepath.Join(dir, "old", "deconflict")
+	for _, p := range []string{real, other} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(dir, "hooks.json")
+	mustWrite(t, settings, `{"hooks": {
+  "SessionStart": [{"hooks": [{"type": "command", "command": "`+link+` hook session-start", "timeout": 10}]}],
+  "Stop": [{"hooks": [{"type": "command", "command": "`+other+` hook stop", "timeout": 10}]}]
+}}`)
+	install(t, func(p *installPlan) { p.hooks(settings, real, codexEditMatcher) })
+	doc := readBack(t, settings)
+	if got := commands(doc, "SessionStart"); len(got) != 1 || got[0] != link+" hook session-start" {
+		t.Errorf("a command naming this binary through a symlink was rewritten: %v", got)
+	}
+	if got := commands(doc, "Stop"); len(got) != 1 || !strings.HasPrefix(got[0], real+" ") {
+		t.Errorf("a command naming a different binary was not corrected: %v", got)
 	}
 }

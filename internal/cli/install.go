@@ -529,6 +529,48 @@ func hookCommand(bin, verb, extra string) string {
 }
 
 // firstWord splits a command line into its program, unquoted, and the rest.
+// sameProgram reports whether two ways of naming a program — a bare name
+// found on PATH, an absolute path, a symlink — end at the same file.
+func sameProgram(a, b string) bool {
+	resolve := func(p string) string {
+		if !strings.ContainsAny(p, `/\`) {
+			if found, err := exec.LookPath(p); err == nil {
+				p = found
+			}
+		}
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			p = r
+		}
+		if abs, err := filepath.Abs(p); err == nil {
+			p = abs
+		}
+		return p
+	}
+	return a != "" && b != "" && resolve(a) == resolve(b)
+}
+
+// sameProgramCommand reports whether a hook command's program is bin.
+func sameProgramCommand(v any, bin string) bool {
+	cmd, ok := jstring(v)
+	if !ok {
+		return false
+	}
+	prog, _ := firstWord(cmd)
+	return sameProgram(prog, bin)
+}
+
+// samePathValue reports whether a JSON string value names bin.
+func samePathValue(v any, bin string) bool {
+	p, ok := jstring(v)
+	return ok && sameProgram(p, bin)
+}
+
+// sameProgramTOML reports whether a TOML string value names bin.
+func sameProgramTOML(value, bin string) bool {
+	p, err := strconv.Unquote(strings.TrimSpace(value))
+	return err == nil && sameProgram(p, bin)
+}
+
 func firstWord(cmd string) (string, string) {
 	cmd = strings.TrimSpace(cmd)
 	if cmd == "" {
@@ -743,7 +785,14 @@ func placeHook(hooks *jobj, event, matcher, bin, verb string, keep bool) error {
 		}
 		if keeper >= 0 && ours[keeper].group == gi {
 			entry := entries[ours[keeper].entry].(*jobj)
-			entry.set("command", jstr(command))
+			// Codex trusts a hook by a hash of its command, so rewriting a
+			// command that already runs this binary — /usr/local/bin/deconflict
+			// to deconflict, say — silently revokes the trust a person gave it.
+			// Every automatic update refreshes the hooks, so this would have
+			// switched Codex's hooks off at every update.
+			if v, _ := entry.get("command"); !sameProgramCommand(v, bin) {
+				entry.set("command", jstr(command))
+			}
 			// The group is ours alone, so its matcher is ours to set.
 			if matcher != "" {
 				group.set("matcher", jstr(matcher))
@@ -906,7 +955,10 @@ func (p *installPlan) jsonMCP(path, bin string) {
 			servers.set("deconflict", entry)
 		}
 		entry.set("type", jstr("stdio"))
-		entry.set("command", jstr(bin))
+		// A command already naming this binary by another path is left be.
+		if v, _ := entry.get("command"); !samePathValue(v, bin) {
+			entry.set("command", jstr(bin))
+		}
 		// Arguments after "mcp" are somebody's choice (a --store, say) and survive.
 		if args, ok := entry.get("args"); !ok || !startsWithMCP(args) {
 			entry.set("args", []any{jstr("mcp")})
@@ -1028,7 +1080,7 @@ func setCodexMCP(d *tomlDoc, bin string) error {
 	}
 	if commandAt < 0 {
 		inserts = append(inserts, command)
-	} else if st := d.stmts[commandAt]; st.value != strconv.Quote(bin) {
+	} else if st := d.stmts[commandAt]; st.value != strconv.Quote(bin) && !sameProgramTOML(st.value, bin) {
 		edits = append(edits, edit{st.first, st.last, []string{command}})
 	}
 	if argsAt < 0 {
