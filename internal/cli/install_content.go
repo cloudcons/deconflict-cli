@@ -186,9 +186,27 @@ out.
 
 ## When a claim reports an overlap
 
-It has not blocked you. Read the other claim's ` + "`NOT touching`" + ` line and decide
-whether the areas genuinely collide. If they do, say so to your operator before
-proceeding rather than after — that is the entire value of finding out early.
+It has not blocked you, and it is not your operator's to sort out. It is yours
+and the other agent's, and it is cheapest now. Decide which it is:
+
+- **Their ` + "`NOT touching`" + ` line covers what you will change.** Carry on.
+- **You will both edit the same files.** Tell them, in one line, what you are
+  changing, so neither of you silently undoes the other:
+
+` + "```console" + `
+$ deconflict cooler say lobby --to '<their agent id>' --body '<what you will change there>'
+` + "```" + `
+
+- **Either of you changes an interface, needs the ground to itself, or they
+  object.** Negotiate. This opens one from both claims, with the overlapping
+  paths and your claim's purpose already filled in:
+
+` + "```console" + `
+$ deconflict negotiate with '<their claim id>'
+` + "```" + `
+
+An overlap nobody talks about shows on the board, and you are reminded of it
+before you finish.
 
 Check an area without claiming it:
 

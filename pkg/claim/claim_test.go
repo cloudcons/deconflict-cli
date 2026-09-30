@@ -1,6 +1,7 @@
 package claim
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -55,5 +56,21 @@ func TestAmendOfAnUnknownClaimIsIgnored(t *testing.T) {
 	folded := Fold([]Event{{Op: "amend", TS: now, Claim: Claim{ID: "ghost", Paths: []string{"**"}}}})
 	if len(folded) != 0 {
 		t.Fatalf("an amendment conjured a claim that was never announced: %+v", folded)
+	}
+}
+
+// An overlap warning ends in what to do, addressed to the other agent, not in
+// a referral to the operator.
+func TestRenderEndsInWhatToDo(t *testing.T) {
+	now := time.Now()
+	other := Claim{ID: "c-ana", Agent: "ana/claude", What: "rework the contract", Created: now, Expires: now.Add(time.Hour)}
+	got := Render([]Conflict{{Other: other, Pairs: [][2]string{{"telemetry/**", "telemetry/contract.yaml"}}}}, now)
+	for _, want := range []string{"--to 'ana/claude'", "negotiate with c-ana", "NOT touching line covers"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("warning lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "operator") {
+		t.Errorf("warning still refers the overlap to the operator:\n%s", got)
 	}
 }

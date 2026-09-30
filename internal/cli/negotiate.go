@@ -8,9 +8,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/cloudcons/deconflict-cli/internal/gitinfo"
+	"github.com/cloudcons/deconflict-cli/pkg/claim"
 	"github.com/cloudcons/deconflict-cli/pkg/protocol"
 	"github.com/cloudcons/deconflict-cli/pkg/client"
 )
@@ -18,6 +21,7 @@ import (
 const negotiateUsage = `deconflict negotiate — coordination protocol for autonomous agents
 
   request     request scoped access for an objective
+  with        open a negotiation over an overlap with another agent's claim
   list        list active negotiations
   show        inspect one negotiation
   propose     submit a proposal or counterproposal JSON document
@@ -44,6 +48,8 @@ func cmdNegotiate(args []string, out io.Writer) error {
 	switch args[0] {
 	case "request":
 		return negotiateRequest(args[1:], out)
+	case "with":
+		return negotiateWith(args[1:], out)
 	case "list":
 		return negotiateList(args[1:], out)
 	case "show":
@@ -95,6 +101,99 @@ func negotiationClient(dsn string) (*client.HTTPStore, error) {
 	}
 	return h, nil
 }
+// negotiateWith opens a negotiation over an overlap, from the two claims.
+//
+// `request` wants the paths, an objective and an access level typed out, when
+// the agent already has everything in hand: its own claim, the other one, and
+// where they meet. In one organization no overlap was ever negotiated, and a
+// command that asked for less was part of the answer. The paths requested are
+// where the claims meet — your side of each overlapping pair — and the
+// objective is your claim's purpose. The registry pulls the other agent in
+// from the overlap and tells it.
+func negotiateWith(args []string, out io.Writer) error {
+	id, rest := takeID(args)
+	fs := flag.NewFlagSet("negotiate with", flag.ContinueOnError)
+	objective := fs.String("objective", "", "what you need the ground for (default: your claim's what)")
+	access := fs.String("access", "modify", "inspect, modify, or exclusive_modify")
+	scope := fs.String("scope", "", "what the access is for, e.g. 'the error section only'")
+	lease := fs.String("lease", "45m", "requested coordination lease")
+	dsn := fs.String("store", "", "registry URL")
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
+	if id == "" {
+		id = fs.Arg(0)
+	}
+	if id == "" {
+		return fmt.Errorf("usage: deconflict negotiate with <their-claim-id>")
+	}
+	st, err := openStore(*dsn)
+	if err != nil {
+		return err
+	}
+	evs, err := st.Events()
+	if err != nil {
+		return err
+	}
+	cwd, _ := os.Getwd()
+	now := time.Now().UTC()
+	all := claim.Fold(evs)
+	var theirs *claim.Claim
+	for i := range all {
+		if all[i].ID == id {
+			theirs = &all[i]
+		}
+	}
+	if theirs == nil || !theirs.Active(now) {
+		return fmt.Errorf("no active claim %s — `deconflict list` shows the live ones", id)
+	}
+	mine := ownActiveClaim(all, cwd, now)
+	if mine == nil {
+		return fmt.Errorf("you hold no active claim in this worktree; claim your work first, then negotiate the overlap")
+	}
+	var paths []string
+	for _, p := range claim.PatternsOverlap(mine.Paths, theirs.Paths) {
+		if !slices.Contains(paths, p[0]) {
+			paths = append(paths, p[0])
+		}
+	}
+	if len(paths) == 0 {
+		return fmt.Errorf("claims %s and %s do not overlap", mine.ID, theirs.ID)
+	}
+	goal := strings.TrimSpace(*objective)
+	if goal == "" {
+		goal = mine.What
+	}
+	h, err := negotiationClient(*dsn)
+	if err != nil {
+		return err
+	}
+	in := protocol.AccessRequest{
+		Repository: theirs.Repo,
+		Agent:      protocol.AgentIdentity{ID: agentID(), Name: agentID(), Runtime: runtimeName(), Instance: defaultInstance()},
+		Objective:  protocol.Objective{ID: protocol.NewID("obj_"), Summary: goal},
+		Resources:  []protocol.ResourceRequest{{Paths: paths, Access: *access, Scope: strings.TrimSpace(*scope)}},
+		Lease:      protocol.Lease{Duration: *lease},
+	}
+	var v protocol.Session
+	if err = h.JSON(http.MethodPost, "/v1/negotiations", in, &v); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "negotiation %s opened with %s over %s\n", v.ID, theirs.Agent, strings.Join(paths, ", "))
+	var others []string
+	for _, p := range v.Participants {
+		if p.Agent.ID != agentID() {
+			others = append(others, p.Agent.ID)
+		}
+	}
+	if len(others) == 0 {
+		fmt.Fprintln(out, "  nobody else was pulled in — the registry found no overlap on its side; tell them directly with `deconflict cooler say`")
+	} else {
+		fmt.Fprintf(out, "  %s told through their mailbox. Next: `deconflict negotiate propose %s` with your terms, or wait for theirs.\n", strings.Join(others, ", "), v.ID)
+	}
+	return nil
+}
+
 func negotiateRequest(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("negotiate request", flag.ContinueOnError)
 	paths := fs.String("paths", "", "comma-separated paths or globs")

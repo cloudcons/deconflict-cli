@@ -415,8 +415,19 @@ func Render(cs []Conflict, now time.Time) string {
 		}
 		fmt.Fprintf(&b, "    overlap: %s\n", strings.Join(ps, ", "))
 	}
-	b.WriteString("\nThis is advisory — it does not block you. Read the 'NOT touching' line " +
-		"before deciding to back off; the area may be safe to work alongside. If you " +
-		"proceed into a genuine overlap, say so to your operator and note it on the PR.\n")
+	// What to do, as a decision rather than a referral. This used to end at
+	// "say so to your operator", and that is what happened: in one
+	// organization 84 pairs of claims overlapped in a week, and not one was
+	// negotiated or even mentioned to the other agent.
+	agent, id := "<agent>", "<claim-id>"
+	if len(cs) == 1 {
+		agent, id = cs[0].Other.Agent, cs[0].Other.ID
+	}
+	b.WriteString("\nThis is advisory — it does not block you. Decide which it is, and act on it now:\n" +
+		"  - Their NOT touching line covers what you will change: carry on.\n" +
+		"  - You will both edit these files: tell them what you are changing, in one line —\n" +
+		"      deconflict cooler say lobby --to '" + agent + "' --body '<what you will change there>'\n" +
+		"  - Either of you changes an interface, needs the ground to itself, or they object:\n" +
+		"      deconflict negotiate with " + id + "\n")
 	return b.String()
 }
