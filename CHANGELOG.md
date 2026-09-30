@@ -8,6 +8,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-09-30
+
 ### Added
 - `deconflict negotiate with <claim-id>` opens a negotiation over an overlap
   from the two claims: the paths where they meet, and your claim's purpose.
@@ -171,7 +173,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.16...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.13...v0.1.14
