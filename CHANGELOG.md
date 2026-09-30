@@ -8,6 +8,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-09-30
+
 ### Added
 - Updates over the air, by organization. An organization sets the client
   version it runs (`client_version` in its settings, deconflict 0.1.27), and
@@ -186,7 +188,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.17...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.18...HEAD
+[0.1.18]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.14...v0.1.15
