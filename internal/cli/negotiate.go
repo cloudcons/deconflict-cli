@@ -418,6 +418,9 @@ func negotiateAsk(args []string, out io.Writer) error {
 	if id == "" || strings.TrimSpace(*subject) == "" || strings.TrimSpace(*assume) == "" {
 		return fmt.Errorf("negotiation id, --subject and --assume are required")
 	}
+	if err := refuseSecrets(*subject, *body, *assume); err != nil {
+		return err
+	}
 	return protocolMutation(*dsn, id, "questions", protocol.QuestionInput{
 		AgentID: *agent, Scope: *scope, Subject: *subject, Body: *body,
 		Assume: *assume, CommitmentID: *commitment,
@@ -453,6 +456,9 @@ func negotiateResolve(args []string, out io.Writer) error {
 	}
 	if id == "" || *question == "" || strings.TrimSpace(*answer) == "" {
 		return fmt.Errorf("negotiation id, --question and --answer are required")
+	}
+	if err := refuseSecrets(*answer); err != nil {
+		return err
 	}
 	return protocolMutation(*dsn, id, "answers", protocol.AnswerInput{
 		QuestionID: *question, Answer: *answer, AgentID: *agent,

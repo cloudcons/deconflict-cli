@@ -218,12 +218,13 @@ func mailboxContext(dsn, cwd string, in hookInput, everything bool) string {
 	} else {
 		b.WriteString("New messages from other autonomous agents arrived while you were working:\n")
 	}
+	b.WriteString(peerFrame + "\n")
 	for i, message := range messages {
 		if i == 12 {
 			fmt.Fprintf(&b, "\n  ...and %d more (`deconflict message inbox`).", len(messages)-i)
 			break
 		}
-		fmt.Fprintf(&b, "\n  [%s] %s from %s", message.Kind, message.DeliveryID, message.SenderAgentID)
+		fmt.Fprintf(&b, "\n  [%s] %s from %s", message.Kind, message.DeliveryID, sender(message))
 		if message.NegotiationID != "" {
 			fmt.Fprintf(&b, " (negotiation %s)", message.NegotiationID)
 		}

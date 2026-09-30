@@ -167,6 +167,9 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 				}
 			}
 		}
+		if err := refuseSecrets(stringArg("body")); err != nil {
+			return nil, err
+		}
 		input := protocol.SendInput{SenderAgentID: stringArg("sender_agent_id"), Recipients: recipients, Kind: stringArg("kind"), NegotiationID: stringArg("negotiation_id"), IdempotencyKey: stringArg("idempotency_key"), TTL: stringArg("ttl"), Payload: map[string]any{"body": stringArg("body")}}
 		var result []protocol.Message
 		err = h.JSON(http.MethodPost, "/v1/messages", input, &result)
@@ -182,7 +185,8 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 		}
 		var result []protocol.Message
 		err = h.JSON(http.MethodGet, "/v1/messages?"+q.Encode(), nil, &result)
-		value = result
+		// Other agents' words, labelled as such, the same as the hooks do.
+		value = frameMessages(result)
 	case "acknowledge_message":
 		var result protocol.Message
 		err = h.JSON(http.MethodPost, "/v1/messages/"+url.PathEscape(stringArg("delivery_id"))+"/ack", map[string]string{"agent_id": stringArg("agent_id")}, &result)
