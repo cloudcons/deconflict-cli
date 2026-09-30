@@ -2,6 +2,7 @@ package claim
 
 import (
 	"testing"
+	"strings"
 	"time"
 )
 
