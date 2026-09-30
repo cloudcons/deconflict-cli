@@ -186,7 +186,7 @@ func mailboxContext(dsn, cwd string, in hookInput, everything bool) string {
 		Capabilities: []string{"messaging", "negotiation", "checkpoints"},
 		TTL:          "5m",
 		// What each agent runs, so an organization can see its rollout land.
-		Metadata: map[string]any{"client_version": clientVersion()},
+		Metadata: versionMetadata(),
 	}
 	var registered protocol.Registration
 	if err := h.JSON("POST", "/v1/agents/register", registration, &registered); err != nil {

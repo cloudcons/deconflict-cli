@@ -8,6 +8,14 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-09-30
+
+### Changed
+- Every registration reports the client version — `message register` and
+  the MCP server's `register_agent` as well as the hooks — so an agent that
+  only registers through MCP is no longer "unreported" on the organization's
+  Settings page.
+
 ## [0.1.20] - 2026-09-30
 
 ### Added
@@ -215,7 +223,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.20...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.21...HEAD
+[0.1.21]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.17...v0.1.18
