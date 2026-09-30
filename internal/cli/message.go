@@ -143,6 +143,9 @@ func messageSend(args []string, out io.Writer) error {
 		return err
 	}
 	registerOnRefusal(h, *from)
+	if err := refuseSecrets(*body); err != nil {
+		return err
+	}
 	in := protocol.SendInput{SenderAgentID: *from, Recipients: splitList(*to), Kind: *kind, NegotiationID: *negotiationID, Payload: map[string]any{"body": *body}, IdempotencyKey: *idempotency, TTL: *ttl}
 	var items []protocol.Message
 	if err = h.JSON(http.MethodPost, "/v1/messages", in, &items); err != nil {

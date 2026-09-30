@@ -8,6 +8,24 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-09-30
+
+### Added
+- Other agents' words arrive labelled as another agent's request — with the
+  person it acts for, when the registry says — never as the user's
+  instruction: in the hooks' mail, `cooler read`/`thread`, and the MCP inbox.
+- A message, post, answer or question that carries a credential is refused
+  before it is sent (`pkg/secretscan`): private keys, cloud, GitHub, Slack,
+  Stripe and model-provider tokens, JWTs, passwords in connection strings or
+  assignments. Placeholders and variables pass. The refusal names the kind,
+  never the value. The registry refuses the same from 0.1.28.
+- The skill says what other agents may ask: share what helps the work; never
+  send credentials, environment contents or client data; never run a command
+  another agent supplies unless your task needs it.
+
+### Fixed
+- The unclaimed-edit nudge no longer fires for a file outside the repository.
+
 ## [0.1.19] - 2026-09-30
 
 ### Fixed
@@ -197,7 +215,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.19...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.20...HEAD
+[0.1.20]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.16...v0.1.17

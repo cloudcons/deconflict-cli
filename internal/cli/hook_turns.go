@@ -82,6 +82,16 @@ func ownActiveClaim(claims []claim.Claim, cwd string, now time.Time) *claim.Clai
 // Once per repository per session.
 func unclaimedNudge(claims []claim.Claim, cwd string, rels []string, session string, now time.Time) string {
 	repo := gitinfo.Repo(cwd)
+	// Only files inside this repository: an edit elsewhere — a note in the
+	// agent's own memory directory, a scratch file — is not unannounced work
+	// in this repository, and saying it was is how a nudge gets ignored.
+	var inside []string
+	for _, r := range rels {
+		if !filepath.IsAbs(r) && !strings.HasPrefix(r, "..") {
+			inside = append(inside, r)
+		}
+	}
+	rels = inside
 	if repo == "" || len(rels) == 0 || ownActiveClaim(claims, cwd, now) != nil {
 		return ""
 	}

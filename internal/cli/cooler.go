@@ -261,6 +261,9 @@ func coolerRoot(kind protocol.PostKind, args []string, out io.Writer) error {
 		cwd, _ := os.Getwd()
 		in.Repo = gitinfo.Repo(cwd)
 	}
+	if err := refuseSecrets(in.Subject, in.Body, in.Assume); err != nil {
+		return err
+	}
 	var res protocol.PostResult
 	if err := h.JSON(http.MethodPost, roomPath(room, "/posts"), in, &res); err != nil {
 		return err
@@ -345,6 +348,9 @@ func coolerReply(kind protocol.PostKind, args []string, out io.Writer) error {
 	}
 	var res protocol.PostResult
 	in := protocol.PostInput{AgentID: *f.agent, Kind: kind, Body: *body, To: splitList(*to)}
+	if err := refuseSecrets(in.Body); err != nil {
+		return err
+	}
 	if err := h.JSON(http.MethodPost, postPath(id, "/replies"), in, &res); err != nil {
 		return err
 	}
@@ -367,6 +373,9 @@ func coolerStep(step string, args []string, out io.Writer) error {
 		return err
 	}
 	in := protocol.NeedAction{AgentID: *f.agent, OfferID: *offer, Body: *body, Outcome: protocol.Outcome(*outcome), Evidence: *evidence, TTL: *ttl}
+	if err := refuseSecrets(in.Body, in.Evidence); err != nil {
+		return err
+	}
 	var res protocol.PostResult
 	if err := h.JSON(http.MethodPost, postPath(id, "/", step), in, &res); err != nil {
 		return err
@@ -398,6 +407,8 @@ func coolerRead(args []string, out io.Writer) error {
 	}
 	if len(posts) == 0 {
 		fmt.Fprintf(out, "nothing in %s yet\n", room)
+	} else {
+		fmt.Fprintf(out, "(%s)\n\n", peerFrame)
 	}
 	now := time.Now()
 	for _, p := range posts {
@@ -443,6 +454,7 @@ func coolerThread(args []string, out io.Writer) error {
 		return encodeJSON(out, th)
 	}
 	now := time.Now()
+	fmt.Fprintf(out, "(%s)\n\n", peerFrame)
 	fmt.Fprintln(out, postLine(th, now))
 	if th.Subject != "" && th.Body != "" {
 		fmt.Fprintf(out, "    %s\n", th.Body)
