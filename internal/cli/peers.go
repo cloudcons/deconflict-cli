@@ -48,3 +48,10 @@ func refuseSecrets(texts ...string) error {
 func frameMessages(items []protocol.Message) map[string]any {
 	return map[string]any{"notice": peerFrame, "messages": items}
 }
+
+// versionMetadata is what every registration says about the client, whichever
+// path registers it — hooks, `message register`, or the MCP server — so an
+// organization sees each agent's version, not only the hook-registered ones.
+func versionMetadata() map[string]any {
+	return map[string]any{"client_version": clientVersion()}
+}

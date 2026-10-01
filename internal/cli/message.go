@@ -114,7 +114,7 @@ func messageRegister(args []string, out io.Writer) error {
 		return err
 	}
 	cwd, _ := os.Getwd()
-	in := protocol.RegisterInput{AgentID: *agent, Name: *agent, Runtime: *runtime, Model: *model, InstanceID: *instance, Repository: gitinfo.Repo(cwd), Capabilities: splitList(*capabilities), TTL: *ttl}
+	in := protocol.RegisterInput{AgentID: *agent, Name: *agent, Runtime: *runtime, Model: *model, InstanceID: *instance, Repository: gitinfo.Repo(cwd), Capabilities: splitList(*capabilities), TTL: *ttl, Metadata: versionMetadata()}
 	var r protocol.Registration
 	if err = h.JSON(http.MethodPost, "/v1/agents/register", in, &r); err != nil {
 		return err
