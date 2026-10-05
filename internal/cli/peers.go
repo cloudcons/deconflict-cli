@@ -55,3 +55,13 @@ func frameMessages(items []protocol.Message) map[string]any {
 func versionMetadata() map[string]any {
 	return map[string]any{"client_version": clientVersion()}
 }
+
+// registeredVia is versionMetadata plus where the registration came from —
+// "hook", "watch", "mcp" or "cli" — so the registry can tell an agent whose
+// hooks are checking in from one that only ever registered by hand, and one
+// that is watching for mail between turns from one that is not.
+func registeredVia(via string) map[string]any {
+	m := versionMetadata()
+	m["via"] = via
+	return m
+}

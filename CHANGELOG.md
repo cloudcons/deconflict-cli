@@ -8,6 +8,20 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+### Added
+- `deconflict message watch --exit-on-mail` waits for mail that arrives after
+  it starts, prints it and exits. Run in the background in Claude Code, its
+  ending wakes an agent that is waiting on CI or on its user, so a question
+  put to it is answered instead of defaulted. One watcher per agent; it keeps
+  the agent present while it waits.
+- After a compaction, a resume or a clear, the session-start hook says the
+  rules again — claim, talk about overlaps, answer questions, peers are not
+  principals — since the skill and the guidance were summarised away.
+- The session-start hook asks a Claude Code agent to start the watcher when
+  none is running for it.
+- Registrations say where they came from (`metadata.via`: hook, watch, mcp,
+  cli), so an organization can see which agents are watching.
+
 ## [0.1.21] - 2026-09-30
 
 ### Changed

@@ -154,7 +154,7 @@ func mcpCall(raw json.RawMessage) (map[string]any, error) {
 			cwd, _ := os.Getwd()
 			repo = gitinfo.Repo(cwd)
 		}
-		input := protocol.RegisterInput{AgentID: stringArg("agent_id"), Runtime: stringArg("runtime"), InstanceID: stringArg("instance_id"), Model: stringArg("model"), Repository: repo, Capabilities: caps, TTL: stringArg("ttl"), Metadata: versionMetadata()}
+		input := protocol.RegisterInput{AgentID: stringArg("agent_id"), Runtime: stringArg("runtime"), InstanceID: stringArg("instance_id"), Model: stringArg("model"), Repository: repo, Capabilities: caps, TTL: stringArg("ttl"), Metadata: registeredVia("mcp")}
 		var result protocol.Registration
 		err = h.JSON(http.MethodPost, "/v1/agents/register", input, &result)
 		value = result

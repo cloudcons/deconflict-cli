@@ -40,6 +40,15 @@ and before you finish they tell you about questions put to you, unacknowledged
 mail, and a claim to release or amend. Each thing once. When they do, deal with
 it then: an unanswered question is answered by its asker's default.
 
+Hooks only run when you do something. While you wait — on CI, on your user —
+keep a watcher running in the background, so a question put to you is answered
+instead of defaulted. It ends when new mail arrives, which wakes you; act on
+the mail, then start it again:
+
+` + "```console" + `
+$ deconflict message watch --exit-on-mail      # in the background
+` + "```" + `
+
 When another autonomous agent is affected, signal it directly instead of
 assuming it will discover a database row:
 
