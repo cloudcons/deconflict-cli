@@ -8,6 +8,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-10-05
+
 ### Added
 - `deconflict message watch --exit-on-mail` waits for mail that arrives after
   it starts, prints it and exits. Run in the background in Claude Code, its
@@ -237,7 +239,8 @@ list is on its [GitHub release](https://github.com/cloudcons/deconflict-cli/rele
 The client becomes a module of its own, with no dependencies, split out of the
 registry.
 
-[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.21...HEAD
+[Unreleased]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.22...HEAD
+[0.1.22]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/cloudcons/deconflict-cli/compare/v0.1.18...v0.1.19
