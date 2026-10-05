@@ -114,7 +114,7 @@ func messageRegister(args []string, out io.Writer) error {
 		return err
 	}
 	cwd, _ := os.Getwd()
-	in := protocol.RegisterInput{AgentID: *agent, Name: *agent, Runtime: *runtime, Model: *model, InstanceID: *instance, Repository: gitinfo.Repo(cwd), Capabilities: splitList(*capabilities), TTL: *ttl, Metadata: versionMetadata()}
+	in := protocol.RegisterInput{AgentID: *agent, Name: *agent, Runtime: *runtime, Model: *model, InstanceID: *instance, Repository: gitinfo.Repo(cwd), Capabilities: splitList(*capabilities), TTL: *ttl, Metadata: registeredVia("cli")}
 	var r protocol.Registration
 	if err = h.JSON(http.MethodPost, "/v1/agents/register", in, &r); err != nil {
 		return err
@@ -183,10 +183,19 @@ func messageWatch(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("message watch", flag.ContinueOnError)
 	agent := fs.String("agent", agentID(), "recipient agent id")
 	after := fs.Int64("after", 0, "initial sequence cursor")
-	wait := fs.Duration("wait", 10*time.Minute, "maximum wait time")
+	wait := fs.Duration("wait", 10*time.Minute, "maximum wait time (with --exit-on-mail: 0, the default there, waits until mail)")
+	exitOnMail := fs.Bool("exit-on-mail", false, "wait for mail that arrives after starting, print it and exit; meant to run in the background so its ending wakes the agent")
+	interval := fs.Duration("interval", 20*time.Second, "with --exit-on-mail: how often to check")
 	dsn := fs.String("store", "", "registry URL")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *exitOnMail {
+		w := *wait
+		if !waitSet(fs) {
+			w = 0
+		}
+		return watchUntilMail(*dsn, *agent, *interval, w, out)
 	}
 	deadline := time.Now().Add(*wait)
 	for time.Now().Before(deadline) {
@@ -296,4 +305,16 @@ func messagePresence(args []string, out io.Writer) error {
 		return err
 	}
 	return encodeJSON(out, items)
+}
+
+// waitSet reports whether --wait was given, so --exit-on-mail can default to
+// waiting until mail instead of the plain watch's ten minutes.
+func waitSet(fs *flag.FlagSet) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "wait" {
+			set = true
+		}
+	})
+	return set
 }

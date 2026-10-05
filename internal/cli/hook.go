@@ -35,6 +35,8 @@ type hookInput struct {
 	// StopHookActive is set when the agent is already continuing because a
 	// stop hook told it to.
 	StopHookActive bool `json:"stop_hook_active"`
+	// Source is why a session started: startup, resume, clear or compact.
+	Source string `json:"source"`
 }
 
 func cmdHook(args []string, out io.Writer) error {
@@ -75,6 +77,17 @@ func cmdHook(args []string, out io.Writer) error {
 	case "session-start", "user-prompt":
 		onlyNew := kind == "user-prompt"
 		text = sessionContext(*dsn, cwd, in.SessionID, onlyNew)
+		if kind == "session-start" {
+			// After a compaction or a resume the rules the skill and the
+			// guidance taught are summarised away while the hooks keep
+			// firing; say them again, briefly, before anything else.
+			if card := rulesCard(in.Source); card != "" {
+				text = card + "\n\n" + text
+			}
+			if hint := watcherHint(in); hint != "" {
+				text = strings.TrimRight(text, "\n") + "\n\n" + hint
+			}
+		}
 		// Held resources are told once, at the start. Repeating them on every
 		// prompt would spend context on the same lines until they were skimmed.
 		if kind == "session-start" {
@@ -186,7 +199,7 @@ func mailboxContext(dsn, cwd string, in hookInput, everything bool) string {
 		Capabilities: []string{"messaging", "negotiation", "checkpoints"},
 		TTL:          "5m",
 		// What each agent runs, so an organization can see its rollout land.
-		Metadata: versionMetadata(),
+		Metadata: registeredVia("hook"),
 	}
 	var registered protocol.Registration
 	if err := h.JSON("POST", "/v1/agents/register", registration, &registered); err != nil {
